@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PitcherWithPitches } from '@entities/pitcher'
 import { codeLabel, type CodeMap } from '@entities/code'
 import { WeatherIcon, WEATHER_COLOR } from '@features/weather-picker/ui/icons'
@@ -6,7 +6,7 @@ import { gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { PITCH_KEYS } from '@shared/config/domain'
 import { pitcherDualDelta } from '@shared/config/dual-position'
-import { Badge, TeamMark } from '@shared/ui'
+import { Badge, TeamWatermark } from '@shared/ui'
 
 /** 구종 표시명 = 특이구종이면 고유명, 아니면 계열명 */
 const pitchLabel = (p: { pitch_type: string; is_special: boolean; special_name: string | null }) =>
@@ -57,9 +57,35 @@ function StatTile({
   )
 }
 
-export function PitcherCard({ p, codes, onClick }: { p: PitcherWithPitches; codes: CodeMap | undefined; onClick: () => void }) {
+export function PitcherCard({
+  p,
+  codes,
+  potentialQuery,
+  positionQuery,
+  onClick,
+}: {
+  p: PitcherWithPitches
+  codes: CodeMap | undefined
+  potentialQuery?: string
+  positionQuery?: string
+  onClick: () => void
+}) {
   const hasDual = !!p.dual_position
-  const [slot, setSlot] = useState<'base' | 'dual'>('base')
+
+  // 검색 매칭이 듀얼 쪽에서만 걸린 카드는 듀얼 탭으로 자동 전환(왜 걸렸는지 보이게)
+  const pq = potentialQuery?.trim() ?? ''
+  const hit = (x: string | null | undefined) => !!pq && !!x && x.includes(pq)
+  const potDualOnly =
+    hasDual &&
+    ![p.potential1, p.potential2, p.potential3, p.sub_potential].some(hit) &&
+    [p.dual_potential1, p.dual_potential2, p.dual_potential3, p.dual_sub_potential].some(hit)
+  const posDualHit = hasDual && !!positionQuery && p.dual_position === positionQuery
+  const dualOnlyMatch = potDualOnly || (posDualHit && p.position !== positionQuery)
+
+  const [slot, setSlot] = useState<'base' | 'dual'>(dualOnlyMatch ? 'dual' : 'base')
+  useEffect(() => {
+    if (dualOnlyMatch) setSlot('dual')
+  }, [dualOnlyMatch])
   const active = hasDual ? slot : 'base'
 
   const gradeColor = `var(${gradeCssVar(p.grade)})`
@@ -95,15 +121,17 @@ export function PitcherCard({ p, codes, onClick }: { p: PitcherWithPitches; code
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}
-      className="text-left rounded-xl border-2 overflow-hidden shadow-[var(--shadow)] transition hover:brightness-[1.02] hover:-translate-y-px cursor-pointer focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
+      className="relative text-left rounded-xl border-2 overflow-hidden shadow-[var(--shadow)] transition hover:brightness-[1.02] hover:-translate-y-px cursor-pointer focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
       style={{
         background: `color-mix(in srgb, ${gradeColor} 8%, var(--surface))`,
         borderColor: gradeColor,
       }}
     >
+      {/* 팀 로고 워터마크 (배경) */}
+      <TeamWatermark code={p.team_code} />
       {/* 등급 색 바 — 한눈에 등급 식별 */}
       <div className="h-1.5 w-full" style={{ background: gradeColor }} />
-      <div className="p-3">
+      <div className="relative z-10 p-3">
         {/* 헤더: 리그·특이폼 / 날씨·등급 */}
         <div className="flex items-center gap-1.5">
           <Badge color={leagueColor}>{codeLabel(codes, 'league', p.league_code) || p.league_code}</Badge>
@@ -135,16 +163,13 @@ export function PitcherCard({ p, codes, onClick }: { p: PitcherWithPitches; code
 
         {/* 팀 / 포지션(듀얼=선택 토글) · 연도 */}
         <div className="mt-0.5 flex items-center gap-2 text-[.76rem]">
-          <span className="flex items-center gap-1 text-ink-soft">
-            <TeamMark code={p.team_code} className="h-4 w-4 shrink-0 object-contain" />
-            {codeLabel(codes, 'team', p.team_code) || p.team_code}
-          </span>
+          <span className="text-ink-soft">{codeLabel(codes, 'team', p.team_code) || p.team_code}</span>
           <span className="ml-auto flex items-center gap-1">
             {hasDual ? (
               <>
                 <PosTab label={posLabel(p.position)} active={active === 'base'} onSelect={() => setSlot('base')} />
                 <span className="text-ink-faint">/</span>
-                <PosTab label={posLabel(p.dual_position!)} active={active === 'dual'} onSelect={() => setSlot('dual')} />
+                <PosTab label={posLabel(p.dual_position!)} active={active === 'dual'} hit={posDualHit} onSelect={() => setSlot('dual')} />
               </>
             ) : (
               <span className="font-semibold">{posLabel(p.position)}</span>
@@ -184,10 +209,19 @@ export function PitcherCard({ p, codes, onClick }: { p: PitcherWithPitches; code
           <div className="mt-2 flex flex-col gap-1">
             {potentials.length > 0 && (
               <div className="flex items-center gap-1.5">
-                <span className="text-[.64rem] font-bold uppercase tracking-[.08em] text-ink-faint w-[42px] shrink-0">잠재력</span>
+                <span
+                  className="text-[.64rem] font-bold uppercase tracking-[.08em] min-w-[42px] shrink-0"
+                  style={{ color: active === 'dual' ? 'var(--gold)' : 'var(--ink-faint)' }}
+                >
+                  {active === 'dual' ? '듀얼 잠재력' : '잠재력'}
+                </span>
                 <div className="flex flex-wrap gap-1">
                   {potentials.map((x) => (
-                    <span key={x} className="rounded border border-line-strong bg-surface px-1.5 py-[1px] text-[.7rem] text-ink-soft">
+                    <span
+                      key={x}
+                      className="rounded border border-line-strong bg-surface px-1.5 py-[1px] text-[.7rem] text-ink-soft"
+                      style={hit(x) ? { borderColor: 'var(--gold)', color: 'var(--gold)', fontWeight: 700 } : undefined}
+                    >
                       {x}
                     </span>
                   ))}
@@ -196,10 +230,19 @@ export function PitcherCard({ p, codes, onClick }: { p: PitcherWithPitches; code
             )}
             {eff.sub && (
               <div className="flex items-center gap-1.5">
-                <span className="text-[.64rem] font-bold uppercase tracking-[.08em] text-ink-faint w-[42px] shrink-0">베테랑</span>
+                <span
+                  className="text-[.64rem] font-bold uppercase tracking-[.08em] min-w-[42px] shrink-0"
+                  style={{ color: active === 'dual' ? 'var(--gold)' : 'var(--ink-faint)' }}
+                >
+                  {active === 'dual' ? '듀얼 베테랑' : '베테랑'}
+                </span>
                 <span
                   className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold text-[color:var(--purple)]"
-                  style={{ borderColor: 'color-mix(in srgb, var(--purple) 45%, transparent)' }}
+                  style={
+                    hit(eff.sub)
+                      ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
+                      : { borderColor: 'color-mix(in srgb, var(--purple) 45%, transparent)' }
+                  }
                 >
                   {eff.sub}
                 </span>
@@ -212,8 +255,8 @@ export function PitcherCard({ p, codes, onClick }: { p: PitcherWithPitches; code
   )
 }
 
-/** 듀얼 포지션 선택 탭 (카드 열림과 분리 — 클릭 전파 차단) */
-function PosTab({ label, active, onSelect }: { label: string; active: boolean; onSelect: () => void }) {
+/** 듀얼 포지션 선택 탭 (카드 열림과 분리 — 클릭 전파 차단). hit = 포지션 검색 매칭 강조 */
+function PosTab({ label, active, hit, onSelect }: { label: string; active: boolean; hit?: boolean; onSelect: () => void }) {
   return (
     <button
       type="button"
@@ -222,11 +265,14 @@ function PosTab({ label, active, onSelect }: { label: string; active: boolean; o
         onSelect()
       }}
       className="font-semibold cursor-pointer transition"
-      style={
-        active
+      style={{
+        ...(active
           ? { color: 'var(--gold)', borderBottom: '2px solid var(--gold)' }
-          : { color: 'var(--ink-faint)', borderBottom: '2px solid transparent' }
-      }
+          : { color: 'var(--ink-faint)', borderBottom: '2px solid transparent' }),
+        ...(hit
+          ? { color: 'var(--gold)', background: 'color-mix(in srgb, var(--gold) 16%, transparent)', borderRadius: 4, padding: '0 4px' }
+          : {}),
+      }}
     >
       {label}
     </button>

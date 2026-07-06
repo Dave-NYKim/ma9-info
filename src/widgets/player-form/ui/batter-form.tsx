@@ -12,6 +12,7 @@ import { PotentialInput } from '@features/potential-autocomplete'
 import { NameAutocomplete } from '@features/name-autocomplete'
 import { BATTER_STATS, BAT_HANDS, LEVELUP1, LEVELUP2, STAT_MAX, STAT_MIN, THROW_HANDS } from '@shared/config/domain'
 import type { GradeCode } from '@shared/config/grades'
+import { useLastEntryStore, type EntryBasics } from '@shared/model/last-entry-store'
 import { Button, Chip, Input, Labeled, Panel, Segmented, Select, Toggle } from '@shared/ui'
 import { cn } from '@shared/lib/cn'
 import { useDebounced } from '@shared/lib/use-debounced'
@@ -29,10 +30,11 @@ interface FormState {
 
 const nn = (s: string) => (s.trim() === '' ? null : s.trim())
 
-function fromBatter(b?: Batter): FormState {
+function fromBatter(b?: Batter, last?: EntryBasics): FormState {
   return {
-    league_code: b?.league_code ?? 'MLB_NL', team_code: b?.team_code ?? '',
-    grade: (b?.grade as GradeCode) ?? 'S', year: b?.year ?? null, name: b?.name ?? '',
+    // 신규 등록이면 마지막 입력의 기본정보(리그·팀·등급·이름)를 미리 채움
+    league_code: b?.league_code ?? last?.league_code ?? 'MLB_NL', team_code: b?.team_code ?? last?.team_code ?? '',
+    grade: (b?.grade as GradeCode) ?? (last?.grade as GradeCode) ?? 'S', year: b?.year ?? null, name: b?.name ?? last?.name ?? '',
     wP: b?.weather ?? null, wS: b?.sub_weather ?? null,
     throw_hand: b?.throw_hand ?? '우투', bat_hand: b?.bat_hand ?? '우타', special_form: b?.special_form ?? false,
     position: b?.position ?? 'C', dual_position: b?.dual_position ?? 'C', dualOn: !!b?.dual_position,
@@ -76,7 +78,9 @@ function ChipRow({ label, options, value, onChange, dim }: { label: string; opti
 }
 
 export function BatterForm({ initial, onDone, onCancel }: { initial?: Batter; onDone: () => void; onCancel: () => void }) {
-  const [s, setS] = useState<FormState>(() => fromBatter(initial))
+  const lastEntry = useLastEntryStore((st) => st.batter)
+  const setLastEntry = useLastEntryStore((st) => st.setBatter)
+  const [s, setS] = useState<FormState>(() => fromBatter(initial, initial ? undefined : lastEntry))
   const set = (patch: Partial<FormState>) => setS((p) => ({ ...p, ...patch }))
   const { data: enums } = useCodes()
   const { data: pots = [] } = useBatterPotentials()
@@ -98,7 +102,11 @@ export function BatterForm({ initial, onDone, onCancel }: { initial?: Batter; on
     if (!s.team_code) return toast.error('소속팀을 선택하세요')
     try {
       if (initial) await update.mutateAsync({ id: initial.id, patch: toInput(s), version: initial.version })
-      else await create.mutateAsync(toInput(s))
+      else {
+        await create.mutateAsync(toInput(s))
+        // 다음 등록 폼에 기본정보 미리 채우기용
+        setLastEntry({ league_code: s.league_code, team_code: s.team_code, grade: s.grade, name: s.name.trim() })
+      }
       toast.success('저장되었습니다')
       onDone()
     } catch (err) {

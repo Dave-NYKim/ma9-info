@@ -38,11 +38,17 @@ export interface Batter {
 /** insert/update 시 보내는 필드 (서버 관리 필드 제외) */
 export type BatterInput = Omit<Batter, 'id' | 'version' | 'created_at' | 'updated_at' | 'deleted_at'>
 
-export interface BatterFilters {
+import type { AdvancedFilters } from '@shared/api/advanced-filters'
+
+export interface BatterFilters extends AdvancedFilters {
   league?: string
   team?: string
   grade?: string
   q?: string
+  /** 레벨업 1유형 (파워/컨택트) */
+  levelup1?: string
+  /** 레벨업 2유형 (스피드/쓰로잉/수비력) — 듀얼 2유형 포함 검색 */
+  levelup2?: string
   page?: number
   size?: number
 }

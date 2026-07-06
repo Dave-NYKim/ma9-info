@@ -5,10 +5,14 @@ import { PitcherCard } from './pitcher-card'
 export function PitcherCards({
   rows,
   codes,
+  potentialQuery,
+  positionQuery,
   onCard,
 }: {
   rows: PitcherWithPitches[]
   codes: CodeMap | undefined
+  potentialQuery?: string
+  positionQuery?: string
   onCard: (id: string) => void
 }) {
   if (rows.length === 0)
@@ -17,7 +21,14 @@ export function PitcherCards({
   return (
     <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
       {rows.map((p) => (
-        <PitcherCard key={p.id} p={p} codes={codes} onClick={() => onCard(p.id)} />
+        <PitcherCard
+          key={p.id}
+          p={p}
+          codes={codes}
+          potentialQuery={potentialQuery}
+          positionQuery={positionQuery}
+          onClick={() => onCard(p.id)}
+        />
       ))}
     </div>
   )

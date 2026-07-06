@@ -1,11 +1,15 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePitcherCards, type PitcherWithPitches } from '@entities/pitcher'
 import { useCodes } from '@entities/code'
 import { DataTable, FilterBar, type Column, type Filters } from '@widgets/players-table'
 import { PitcherCards } from '@widgets/pitcher-cards'
 import { gradeCssVar } from '@shared/config/grades'
-import { Button, Segmented } from '@shared/ui'
+import { PAGE_SIZE } from '@shared/config/domain'
+import { createListStore } from '@shared/model/list-store'
+import { Button, Segmented, Pager } from '@shared/ui'
+
+// 모듈 스코프 스토어 — 상세 갔다 뒤로 와도 검색 상태(필터·페이지·뷰) 유지
+const useListStore = createListStore<Filters>()
 
 const gradeCell = (g: string) => (
   <span className="font-extrabold" style={{ color: `var(${gradeCssVar(g)})` }}>
@@ -30,9 +34,8 @@ const VIEWS = ['카드', '표'] as const
 export function PitchersPage() {
   const nav = useNavigate()
   const { data: codes } = useCodes()
-  const [filters, setFilters] = useState<Filters>({})
-  const [view, setView] = useState<(typeof VIEWS)[number]>('카드')
-  const { data, isLoading } = usePitcherCards(filters)
+  const { filters, page, view, setFilters, setPage, setView } = useListStore()
+  const { data, isLoading } = usePitcherCards({ ...filters, page, size: PAGE_SIZE })
   const rows = data?.items ?? []
 
   return (
@@ -49,14 +52,21 @@ export function PitchersPage() {
           </Button>
         </div>
       </div>
-      <FilterBar enums={codes} value={filters} onChange={setFilters} />
+      <FilterBar kind="pitcher" enums={codes} value={filters} onChange={setFilters} />
       {isLoading ? (
         <div className="p-8 text-center text-ink-faint">불러오는 중…</div>
       ) : view === '카드' ? (
-        <PitcherCards rows={rows} codes={codes} onCard={(id) => nav(`/pitchers/${id}`)} />
+        <PitcherCards
+          rows={rows}
+          codes={codes}
+          potentialQuery={filters.potential}
+          positionQuery={filters.position}
+          onCard={(id) => nav(`/pitchers/${id}`)}
+        />
       ) : (
         <DataTable rows={rows} columns={columns} onRow={(id) => nav(`/pitchers/${id}`)} />
       )}
+      <Pager page={page} size={PAGE_SIZE} total={data?.total ?? 0} onPage={setPage} />
     </div>
   )
 }

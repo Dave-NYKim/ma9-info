@@ -13,6 +13,7 @@ import { NameAutocomplete } from '@features/name-autocomplete'
 import { PitchKeyboard, emptyPitchState, type PitchState } from '@features/pitch-keyboard'
 import { BAT_HANDS, LEVELUP_PITCH_KEYS, PITCH_KEYS, STAT_MAX, STAT_MIN, THROW_HANDS, type PitchKey } from '@shared/config/domain'
 import type { GradeCode } from '@shared/config/grades'
+import { useLastEntryStore, type EntryBasics } from '@shared/model/last-entry-store'
 import { Button, Chip, Input, Labeled, Panel, Segmented, Select, Toggle } from '@shared/ui'
 import { cn } from '@shared/lib/cn'
 import { useDebounced } from '@shared/lib/use-debounced'
@@ -40,10 +41,11 @@ function stateToPitches(st: PitchState): PitcherPitch[] {
   }))
 }
 
-function fromPitcher(p?: PitcherWithPitches): PState {
+function fromPitcher(p?: PitcherWithPitches, last?: EntryBasics): PState {
   return {
-    league_code: p?.league_code ?? 'MLB_NL', team_code: p?.team_code ?? '',
-    grade: (p?.grade as GradeCode) ?? 'S', year: p?.year ?? null, name: p?.name ?? '',
+    // 신규 등록이면 마지막 입력의 기본정보(리그·팀·등급·이름)를 미리 채움
+    league_code: p?.league_code ?? last?.league_code ?? 'MLB_NL', team_code: p?.team_code ?? last?.team_code ?? '',
+    grade: (p?.grade as GradeCode) ?? (last?.grade as GradeCode) ?? 'S', year: p?.year ?? null, name: p?.name ?? last?.name ?? '',
     wP: p?.weather ?? null, wS: p?.sub_weather ?? null,
     throw_hand: p?.throw_hand ?? '우투', bat_hand: p?.bat_hand ?? '우타', special_form: p?.special_form ?? false,
     position: p?.position ?? 'SP', dual_position: p?.dual_position ?? 'RP', dualOn: !!p?.dual_position,
@@ -66,7 +68,9 @@ function toInput(s: PState): PitcherInput {
 }
 
 export function PitcherForm({ initial, onDone, onCancel }: { initial?: PitcherWithPitches; onDone: () => void; onCancel: () => void }) {
-  const [s, setS] = useState<PState>(() => fromPitcher(initial))
+  const lastEntry = useLastEntryStore((st) => st.pitcher)
+  const setLastEntry = useLastEntryStore((st) => st.setPitcher)
+  const [s, setS] = useState<PState>(() => fromPitcher(initial, initial ? undefined : lastEntry))
   const set = (patch: Partial<PState>) => setS((p) => ({ ...p, ...patch }))
   const { data: enums } = useCodes()
   const { data: pots = [] } = usePitcherPotentials()
@@ -96,7 +100,11 @@ export function PitcherForm({ initial, onDone, onCancel }: { initial?: PitcherWi
     const pitches = stateToPitches(s.pitches)
     try {
       if (initial) await update.mutateAsync({ id: initial.id, patch: toInput(s), version: initial.version, pitches })
-      else await create.mutateAsync({ input: toInput(s), pitches })
+      else {
+        await create.mutateAsync({ input: toInput(s), pitches })
+        // 다음 등록 폼에 기본정보 미리 채우기용
+        setLastEntry({ league_code: s.league_code, team_code: s.team_code, grade: s.grade, name: s.name.trim() })
+      }
       toast.success('저장되었습니다')
       onDone()
     } catch (err) {

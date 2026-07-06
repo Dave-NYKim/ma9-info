@@ -44,11 +44,17 @@ export interface PitcherWithPitches extends Pitcher {
   pitcher_pitches: PitcherPitch[]
 }
 
-export interface PitcherFilters {
+import type { AdvancedFilters, StatRange } from '@shared/api/advanced-filters'
+
+export interface PitcherFilters extends AdvancedFilters {
   league?: string
   team?: string
   grade?: string
   q?: string
+  /** 레벨업(성장) 구종 키 (W/A/D/F/Z/X/C) */
+  levelupPitch?: string
+  /** 구종 키 → 구위 이상/이하 (pitcher_pitches 조인 검색) */
+  pitches?: Record<string, StatRange>
   page?: number
   size?: number
 }

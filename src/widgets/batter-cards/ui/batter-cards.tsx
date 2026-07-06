@@ -5,10 +5,14 @@ import { BatterCard } from './batter-card'
 export function BatterCards({
   rows,
   codes,
+  potentialQuery,
+  positionQuery,
   onCard,
 }: {
   rows: Batter[]
   codes: CodeMap | undefined
+  potentialQuery?: string
+  positionQuery?: string
   onCard: (id: string) => void
 }) {
   if (rows.length === 0)
@@ -17,7 +21,14 @@ export function BatterCards({
   return (
     <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
       {rows.map((b) => (
-        <BatterCard key={b.id} b={b} codes={codes} onClick={() => onCard(b.id)} />
+        <BatterCard
+          key={b.id}
+          b={b}
+          codes={codes}
+          potentialQuery={potentialQuery}
+          positionQuery={positionQuery}
+          onClick={() => onCard(b.id)}
+        />
       ))}
     </div>
   )

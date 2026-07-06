@@ -1,15 +1,18 @@
 import { supabase } from '@shared/api/supabase'
+import { applyAdvancedFilters } from '@shared/api/advanced-filters'
 import { ConflictError } from '@shared/lib/errors'
 import type { Pitcher, PitcherFilters, PitcherInput, PitcherPitch, PitcherWithPitches } from '../model/types'
 
 export async function listPitchers(f: PitcherFilters): Promise<{ items: Pitcher[]; total: number }> {
   const page = f.page ?? 0
-  const size = f.size ?? 50
+  const size = f.size ?? 40
   let q = supabase.from('v_pitchers').select('*', { count: 'exact' })
   if (f.league) q = q.eq('league_code', f.league)
   if (f.team) q = q.eq('team_code', f.team)
   if (f.grade) q = q.eq('grade', f.grade)
   if (f.q) q = q.ilike('name', `%${f.q}%`)
+  if (f.levelupPitch) q = q.eq('levelup_pitch', f.levelupPitch)
+  q = applyAdvancedFilters(q, f)
   const { data, error, count } = await q.order('name').range(page * size, page * size + size - 1)
   if (error) throw error
   return { items: (data ?? []) as Pitcher[], total: count ?? 0 }
@@ -20,15 +23,31 @@ export async function listPitchersWithPitches(
   f: PitcherFilters,
 ): Promise<{ items: PitcherWithPitches[]; total: number }> {
   const page = f.page ?? 0
-  const size = f.size ?? 50
-  let q = supabase.from('pitchers').select('*, pitcher_pitches(*)', { count: 'exact' }).is('deleted_at', null)
+  const size = f.size ?? 40
+  // 구종 구위 조건 — 키별 별칭 !inner 임베드(EXISTS)로 AND 결합 (키는 대문자 1글자만 허용)
+  const pitchConds = Object.entries(f.pitches ?? {}).filter(
+    ([k, r]) => /^[A-Z]$/.test(k) && (r.min != null || r.max != null),
+  )
+  const embeds = pitchConds.map(([k]) => `, p${k}:pitcher_pitches!inner(key)`).join('')
+  let q = supabase
+    .from('pitchers')
+    .select(`*, pitcher_pitches(*)${embeds}`, { count: 'exact' })
+    .is('deleted_at', null)
   if (f.league) q = q.eq('league_code', f.league)
   if (f.team) q = q.eq('team_code', f.team)
   if (f.grade) q = q.eq('grade', f.grade)
   if (f.q) q = q.ilike('name', `%${f.q}%`)
+  if (f.levelupPitch) q = q.eq('levelup_pitch', f.levelupPitch)
+  for (const [k, r] of pitchConds) {
+    q = q.eq(`p${k}.key`, k)
+    if (r.min != null) q = q.gte(`p${k}.value`, r.min)
+    if (r.max != null) q = q.lte(`p${k}.value`, r.max)
+  }
+  q = applyAdvancedFilters(q, f)
   const { data, error, count } = await q.order('name').range(page * size, page * size + size - 1)
   if (error) throw error
-  return { items: (data ?? []) as PitcherWithPitches[], total: count ?? 0 }
+  // select 문자열이 동적(별칭 임베드)이라 타입 파서가 추론 못함 → unknown 경유 캐스팅
+  return { items: (data ?? []) as unknown as PitcherWithPitches[], total: count ?? 0 }
 }
 
 /** 이름 자동완성용: 고정 신원 정보 + 특이구종(키·계열·이름). 이름별 중복 제거. */

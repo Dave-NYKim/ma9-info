@@ -1,4 +1,5 @@
 import { supabase } from '@shared/api/supabase'
+import { applyAdvancedFilters } from '@shared/api/advanced-filters'
 import { ConflictError } from '@shared/lib/errors'
 import type { Batter, BatterInput, BatterFilters } from '../model/types'
 
@@ -6,12 +7,15 @@ export { ConflictError }
 
 export async function listBatters(f: BatterFilters): Promise<{ items: Batter[]; total: number }> {
   const page = f.page ?? 0
-  const size = f.size ?? 50
+  const size = f.size ?? 40
   let q = supabase.from('v_batters').select('*', { count: 'exact' })
   if (f.league) q = q.eq('league_code', f.league)
   if (f.team) q = q.eq('team_code', f.team)
   if (f.grade) q = q.eq('grade', f.grade)
   if (f.q) q = q.ilike('name', `%${f.q}%`)
+  if (f.levelup1) q = q.eq('levelup_type1', f.levelup1)
+  if (f.levelup2) q = q.or(`levelup_type2.eq.${f.levelup2},dual_levelup_type2.eq.${f.levelup2}`)
+  q = applyAdvancedFilters(q, f)
   const { data, error, count } = await q.order('name').range(page * size, page * size + size - 1)
   if (error) throw error
   return { items: (data ?? []) as Batter[], total: count ?? 0 }

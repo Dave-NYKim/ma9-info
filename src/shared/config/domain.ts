@@ -32,5 +32,17 @@ export const BATTER_STATS = [
   { key: 'clutch', label: '클러치' },
 ] as const
 
+/** 투수 고유 스탯 (구종은 별도) */
+export const PITCHER_STATS = [
+  { key: 'stamina', label: '체력' },
+  { key: 'control', label: '제구' },
+] as const
+
+/** 투수 포지션 코드 — codes 'position' 중 투수 몫 (나머지는 타자) */
+export const PITCHER_POSITION_CODES = ['SP', 'RP', 'CP'] as const
+
 export const STAT_MIN = 1
 export const STAT_MAX = 100
+
+/** 목록 페이지당 카드 수 */
+export const PAGE_SIZE = 40
