@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== 디자인 토큰 (야구 스코어보드: 그린바이어스 뉴트럴 + 클레이 액센트) ===== */
+:root {
+  --ground:#e9ede6; --surface:#fff; --surface-2:#f4f7f2; --surface-3:#eef2ec;
+  --ink:#17201a; --ink-soft:#54605a; --ink-faint:#8a968c;
+  --line:#dbe1d8; --line-strong:#c6cfc4;
+  --clay:#bf5233; --blue:#3a6b8a; --gold:#8a6d2f; --green:#2f8f6b; --purple:#7a6cc4;
+  --sun:#d9a520; --rain:#3f77b0; --snow:#6fa8d0; --cloud:#7f8c94; --none:#33a457;
+  /* 등급색 (마구마구 실제) */
+  --g-sg:#2ea6e0; --g-b:#2c3033; --g-fr:#5b2a91; --g-e:#8b52c9; --g-l:#dca800; --g-r:#d23f3a; --g-s:#e2801f;
+  /* 등급 선택으로 바뀌는 폼 액센트 (기본 clay) */
+  --accent:var(--clay); --accent-tx:#fff;
+  --shadow:0 1px 2px rgba(23,32,26,.05),0 10px 30px -18px rgba(23,32,26,.3);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#0d120f; --surface:#151c17; --surface-2:#1a221c; --surface-3:#202a22;
+    --ink:#e7ede6; --ink-soft:#9faba0; --ink-faint:#6b776d; --line:#27312a; --line-strong:#37443a;
+    --clay:#e07a54; --blue:#74a9c9; --gold:#d1a955; --green:#5cc79a; --purple:#a99ce6;
+    --sun:#e6bb45; --rain:#6ea3d4; --snow:#94c2e4; --cloud:#9aa6ad; --none:#57c46f;
+    --g-b:#5a616a; --g-sg:#4bb8ee;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 14px 34px -20px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="light"] { --ground:#e9ede6; --surface:#fff; --surface-2:#f4f7f2; --surface-3:#eef2ec; --ink:#17201a; --ink-soft:#54605a; --ink-faint:#8a968c; --line:#dbe1d8; --line-strong:#c6cfc4; --clay:#bf5233; --g-b:#2c3033; --g-sg:#2ea6e0; }
+:root[data-theme="dark"]  { --ground:#0d120f; --surface:#151c17; --surface-2:#1a221c; --surface-3:#202a22; --ink:#e7ede6; --ink-soft:#9faba0; --ink-faint:#6b776d; --line:#27312a; --line-strong:#37443a; --clay:#e07a54; --g-b:#5a616a; --g-sg:#4bb8ee; }
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
