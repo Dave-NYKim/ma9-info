@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { PitcherWithPitches } from '@entities/pitcher'
 import { codeLabel, type CodeMap } from '@entities/code'
+import { usePitcherPotentialMap, PotentialTipBody, hasPotentialTip } from '@entities/potential'
 import { WeatherIcon, WEATHER_COLOR } from '@features/weather-picker/ui/icons'
 import { gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { PITCH_KEYS } from '@shared/config/domain'
 import { pitcherDualDelta } from '@shared/config/dual-position'
-import { Badge, TeamWatermark } from '@shared/ui'
+import { Badge, HoverTip, TeamWatermark } from '@shared/ui'
 
 /** 구종 표시명 = 특이구종이면 고유명, 아니면 계열명 */
 const pitchLabel = (p: { pitch_type: string; is_special: boolean; special_name: string | null }) =>
@@ -87,6 +89,18 @@ export function PitcherCard({
     if (dualOnlyMatch) setSlot('dual')
   }, [dualOnlyMatch])
   const active = hasDual ? slot : 'base'
+
+  const nav = useNavigate()
+  const { data: potMap } = usePitcherPotentialMap()
+  const potTip = (name: string, accent?: string) => {
+    const info = potMap?.[name]
+    return hasPotentialTip(info) ? <PotentialTipBody info={info} accent={accent} /> : undefined
+  }
+  // 잠재력 뱃지 클릭 → 관리 표에서 해당 잠재력 보기 (카드 열림과 분리)
+  const goPotential = (e: React.MouseEvent, name: string) => {
+    e.stopPropagation()
+    nav(`/potentials?kind=pitcher&q=${encodeURIComponent(name)}`)
+  }
 
   const gradeColor = `var(${gradeCssVar(p.grade)})`
   const gradeTx = GRADE_ACCENT_TEXT[p.grade] ?? '#fff'
@@ -217,13 +231,22 @@ export function PitcherCard({
                 </span>
                 <div className="flex flex-wrap gap-1">
                   {potentials.map((x) => (
-                    <span
-                      key={x}
-                      className="rounded border border-line-strong bg-surface px-1.5 py-[1px] text-[.7rem] text-ink-soft"
-                      style={hit(x) ? { borderColor: 'var(--gold)', color: 'var(--gold)', fontWeight: 700 } : undefined}
-                    >
-                      {x}
-                    </span>
+                    <HoverTip key={x} tip={potTip(x)} tint="var(--green)">
+                      <span
+                        onClick={(e) => goPotential(e, x)}
+                        className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold cursor-pointer text-[color:var(--green)]"
+                        style={
+                          hit(x)
+                            ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
+                            : {
+                                borderColor: 'color-mix(in srgb, var(--green) 45%, transparent)',
+                                background: 'color-mix(in srgb, var(--green) 8%, var(--surface))',
+                              }
+                        }
+                      >
+                        {x}
+                      </span>
+                    </HoverTip>
                   ))}
                 </div>
               </div>
@@ -236,16 +259,19 @@ export function PitcherCard({
                 >
                   {active === 'dual' ? '듀얼 베테랑' : '베테랑'}
                 </span>
-                <span
-                  className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold text-[color:var(--purple)]"
-                  style={
-                    hit(eff.sub)
-                      ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
-                      : { borderColor: 'color-mix(in srgb, var(--purple) 45%, transparent)' }
-                  }
-                >
-                  {eff.sub}
-                </span>
+                <HoverTip tip={potTip(eff.sub, 'var(--purple)')} tint="var(--purple)">
+                  <span
+                    onClick={(e) => goPotential(e, eff.sub!)}
+                    className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold cursor-pointer text-[color:var(--purple)]"
+                    style={
+                      hit(eff.sub)
+                        ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
+                        : { borderColor: 'color-mix(in srgb, var(--purple) 45%, transparent)' }
+                    }
+                  >
+                    {eff.sub}
+                  </span>
+                </HoverTip>
               </div>
             )}
           </div>

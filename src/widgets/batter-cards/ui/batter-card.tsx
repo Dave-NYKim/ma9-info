@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Batter } from '@entities/batter'
 import { codeLabel, type CodeMap } from '@entities/code'
+import { useBatterPotentialMap, PotentialTipBody, hasPotentialTip } from '@entities/potential'
 import { WeatherIcon, WEATHER_COLOR } from '@features/weather-picker/ui/icons'
 import { gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { batterDualDelta } from '@shared/config/dual-position'
-import { Badge, TeamWatermark } from '@shared/ui'
+import { Badge, HoverTip, TeamWatermark } from '@shared/ui'
 
 /** 스탯 배치 = 게임 고급카드 순서 (열: 파워/컨택 · 스피드/스로잉 · 수비력/클러치) */
 const STAT_CELLS: { label: string; key: keyof Batter }[] = [
@@ -47,6 +49,18 @@ export function BatterCard({
     if (dualOnlyMatch) setSlot('dual')
   }, [dualOnlyMatch])
   const active = hasDual ? slot : 'base'
+
+  const nav = useNavigate()
+  const { data: potMap } = useBatterPotentialMap()
+  const potTip = (name: string, accent?: string) => {
+    const info = potMap?.[name]
+    return hasPotentialTip(info) ? <PotentialTipBody info={info} accent={accent} /> : undefined
+  }
+  // 잠재력 뱃지 클릭 → 관리 표에서 해당 잠재력 보기 (카드 열림과 분리)
+  const goPotential = (e: React.MouseEvent, name: string) => {
+    e.stopPropagation()
+    nav(`/potentials?kind=batter&q=${encodeURIComponent(name)}`)
+  }
 
   const gradeColor = `var(${gradeCssVar(b.grade)})`
   const gradeTx = GRADE_ACCENT_TEXT[b.grade] ?? '#fff'
@@ -172,13 +186,22 @@ export function BatterCard({
               </span>
               <div className="flex flex-wrap gap-1">
                 {potentials.map((p) => (
-                  <span
-                    key={p}
-                    className="rounded border border-line-strong bg-surface px-1.5 py-[1px] text-[.7rem] text-ink-soft"
-                    style={hit(p) ? { borderColor: 'var(--gold)', color: 'var(--gold)', fontWeight: 700 } : undefined}
-                  >
-                    {p}
-                  </span>
+                  <HoverTip key={p} tip={potTip(p)} tint="var(--green)">
+                    <span
+                      onClick={(e) => goPotential(e, p)}
+                      className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold cursor-pointer text-[color:var(--green)]"
+                      style={
+                        hit(p)
+                          ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
+                          : {
+                              borderColor: 'color-mix(in srgb, var(--green) 45%, transparent)',
+                              background: 'color-mix(in srgb, var(--green) 8%, var(--surface))',
+                            }
+                      }
+                    >
+                      {p}
+                    </span>
+                  </HoverTip>
                 ))}
               </div>
             </div>
@@ -191,16 +214,19 @@ export function BatterCard({
               >
                 {active === 'dual' ? '듀얼 베테랑' : '베테랑'}
               </span>
-              <span
-                className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold text-[color:var(--purple)]"
-                style={
-                  hit(eff.sub)
-                    ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
-                    : { borderColor: 'color-mix(in srgb, var(--purple) 45%, transparent)' }
-                }
-              >
-                {eff.sub}
-              </span>
+              <HoverTip tip={potTip(eff.sub, 'var(--purple)')} tint="var(--purple)">
+                <span
+                  onClick={(e) => goPotential(e, eff.sub!)}
+                  className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold cursor-pointer text-[color:var(--purple)]"
+                  style={
+                    hit(eff.sub)
+                      ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
+                      : { borderColor: 'color-mix(in srgb, var(--purple) 45%, transparent)' }
+                  }
+                >
+                  {eff.sub}
+                </span>
+              </HoverTip>
             </div>
           )}
         </div>

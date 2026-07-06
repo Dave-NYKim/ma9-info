@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useSession } from '@entities/session'
 import { AppHeader } from '@widgets/app-header'
+import { AppFooter } from '@widgets/app-footer'
 
 export function AuthGuard() {
   const s = useSession()
@@ -12,6 +13,7 @@ export function AuthGuard() {
       <main className="flex-1">
         <Outlet />
       </main>
+      <AppFooter />
     </div>
   )
 }
