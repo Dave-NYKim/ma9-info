@@ -4,60 +4,16 @@ import type { PitcherWithPitches } from '@entities/pitcher'
 import { codeLabel, type CodeMap } from '@entities/code'
 import { usePitcherPotentialMap, PotentialTipBody, hasPotentialTip } from '@entities/potential'
 import { WeatherIcon, WEATHER_COLOR } from '@features/weather-picker/ui/icons'
-import { gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
+import { gradeBarBg, gradeCardBg, gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { PITCH_KEYS } from '@shared/config/domain'
 import { pitcherDualDelta } from '@shared/config/dual-position'
-import { Badge, HoverTip, TeamWatermark } from '@shared/ui'
+import { Badge, HoverTip, NameWing, StatTile, TeamWatermark, TruncateTip } from '@shared/ui'
 
 /** 구종 표시명 = 특이구종이면 고유명, 아니면 계열명 */
 const pitchLabel = (p: { pitch_type: string; is_special: boolean; special_name: string | null }) =>
   p.is_special ? p.special_name || p.pitch_type : p.pitch_type
 
-/** 스탯 타일 (체력·제구 + 구종). 성장구종은 금색 강조, 특이구종은 clay 색.
- *  delta≠0 이면 부포지션 보정치(표시 전용) — 값에 반영하고 증감 표기. */
-function StatTile({
-  label,
-  value,
-  growth,
-  special,
-  delta = 0,
-}: {
-  label: string
-  value: number | null
-  growth?: boolean
-  special?: boolean
-  delta?: number
-}) {
-  const shown = value == null ? null : Math.max(1, Math.min(100, value + delta))
-  const dc = delta > 0 ? 'var(--green)' : 'var(--g-r)'
-  return (
-    <div
-      className="rounded-md px-1.5 py-1 text-center"
-      style={{
-        background: growth ? 'color-mix(in srgb, var(--gold) 16%, var(--surface-2))' : 'var(--surface-2)',
-        boxShadow: growth ? 'inset 0 0 0 1px var(--gold)' : undefined,
-      }}
-    >
-      <div
-        className="text-[.6rem] leading-tight truncate"
-        style={{ color: special ? 'var(--clay)' : 'var(--ink-faint)' }}
-        title={special ? `${label} (특이구종)` : label}
-      >
-        {growth && '▲'}
-        {label}
-      </div>
-      <div className="font-mono font-bold tabular-nums text-[.8rem] leading-tight flex items-baseline justify-center gap-0.5">
-        <span style={delta ? { color: dc } : undefined}>{shown ?? '—'}</span>
-        {delta !== 0 && (
-          <span className="text-[.54rem] font-bold" style={{ color: dc }}>
-            {delta > 0 ? `+${delta}` : delta}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
 
 export function PitcherCard({
   p,
@@ -105,7 +61,7 @@ export function PitcherCard({
   const gradeColor = `var(${gradeCssVar(p.grade)})`
   const gradeTx = GRADE_ACCENT_TEXT[p.grade] ?? '#fff'
   const leagueColor = LEAGUE_COLOR[p.league_code] ?? 'var(--ink-soft)'
-  const weathers = [p.weather, p.sub_weather].filter((w): w is string => !!w && w !== '무속')
+  const weathers = [p.weather, p.sub_weather].filter((w): w is string => !!w)
 
   // 투수는 레벨업(성장구종) 공통 · 듀얼로 갈리는 건 잠재력(4슬롯)뿐. null 이면 기본과 동일(폴백).
   const eff =
@@ -121,7 +77,6 @@ export function PitcherCard({
   const pitches = [...(p.pitcher_pitches ?? [])].sort(
     (a, b) => PITCH_KEYS.indexOf(a.key as (typeof PITCH_KEYS)[number]) - PITCH_KEYS.indexOf(b.key as (typeof PITCH_KEYS)[number]),
   )
-  const growthPitch = pitches.find((pt) => pt.key === p.levelup_pitch)
 
   const posLabel = (code: string) => codeLabel(codes, 'position', code) || code
 
@@ -137,14 +92,14 @@ export function PitcherCard({
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}
       className="relative text-left rounded-xl border-2 overflow-hidden shadow-[var(--shadow)] transition hover:brightness-[1.02] hover:-translate-y-px cursor-pointer focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
       style={{
-        background: `color-mix(in srgb, ${gradeColor} 8%, var(--surface))`,
+        background: gradeCardBg(p.grade),
         borderColor: gradeColor,
       }}
     >
       {/* 팀 로고 워터마크 (배경) */}
       <TeamWatermark code={p.team_code} />
-      {/* 등급 색 바 — 한눈에 등급 식별 */}
-      <div className="h-1.5 w-full" style={{ background: gradeColor }} />
+      {/* 등급 색 바 — 한눈에 등급 식별 (시그니처는 홀로그램 그라데이션) */}
+      <div className="h-1.5 w-full" style={{ background: gradeBarBg(p.grade) }} />
       <div className="relative z-10 p-3">
         {/* 헤더: 리그·특이폼 / 날씨·등급 */}
         <div className="flex items-center gap-1.5">
@@ -156,7 +111,7 @@ export function PitcherCard({
                 <WeatherIcon name={w} />
               </span>
             ))}
-            <Badge color={gradeColor} text={gradeTx}>
+            <Badge color={gradeBarBg(p.grade)} text={gradeTx}>
               {p.grade} · {gradeName(p.grade)}
             </Badge>
           </div>
@@ -164,32 +119,43 @@ export function PitcherCard({
 
         {/* 이름 · 투타 / 성장구종 */}
         <div className="mt-2 flex items-baseline gap-2">
-          <h3 className="text-[1.05rem] font-extrabold leading-tight">{p.name}</h3>
-          <span className="text-[.72rem] text-ink-faint tabular-nums">
+          {/* 한 줄 고정 — 이름이 남는 폭을 다 쓰고 잘림(… + 오버 즉시 전체), 투타·유형은 절대 안 내려감.
+              시그니처·블랙은 실카드처럼 이름 양옆 날개 장식 */}
+          <h3 className="min-w-0 flex-1 flex items-center gap-1 text-[1.15rem] font-extrabold leading-tight">
+            {(p.grade === 'SG' || p.grade === 'B') && <NameWing variant={p.grade} className="shrink-0" />}
+            <TruncateTip text={p.name} className="block min-w-0 truncate" />
+            {(p.grade === 'SG' || p.grade === 'B') && <NameWing variant={p.grade} flip className="shrink-0" />}
+          </h3>
+          <span className="shrink-0 text-[.72rem] text-ink-faint tabular-nums">
             {p.throw_hand}/{p.bat_hand}
           </span>
-          {growthPitch && (
-            <span className="ml-auto text-[.72rem] font-semibold" style={{ color: 'var(--gold)' }}>
-              ▲ {pitchLabel(growthPitch)}
-            </span>
+          {p.levelup_pitch && (
+            <span className="shrink-0 text-[.72rem] font-semibold whitespace-nowrap text-ink">{p.levelup_pitch}형</span>
           )}
         </div>
 
-        {/* 팀 / 포지션(듀얼=선택 토글) · 연도 */}
+        {/* 팀 · 연도 / 포지션(듀얼=선택 토글) */}
         <div className="mt-0.5 flex items-center gap-2 text-[.76rem]">
           <span className="text-ink-soft">{codeLabel(codes, 'team', p.team_code) || p.team_code}</span>
-          <span className="ml-auto flex items-center gap-1">
+          {p.year != null && (
+            <span className="rounded border border-line-strong bg-surface px-1.5 py-[1px] text-[.68rem] font-bold tabular-nums text-ink">
+              {p.year}
+            </span>
+          )}
+          <span className="ml-auto flex items-center">
             {hasDual ? (
-              <>
+              // 세그먼트 토글 — 그룹 전체 클릭 전파 차단(카드 편집 안 열림)
+              <span
+                className="inline-flex overflow-hidden rounded-md border border-line-strong"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <PosTab label={posLabel(p.position)} active={active === 'base'} onSelect={() => setSlot('base')} />
-                <span className="text-ink-faint">/</span>
                 <PosTab label={posLabel(p.dual_position!)} active={active === 'dual'} hit={posDualHit} onSelect={() => setSlot('dual')} />
-              </>
+              </span>
             ) : (
               <span className="font-semibold">{posLabel(p.position)}</span>
             )}
           </span>
-          {p.year != null && <span className="text-ink-faint tabular-nums">{p.year}</span>}
         </div>
 
         {/* 스탯: 체력·제구 + 구종 6 (4열 × 2행) — 부포지션 선택 시 체력·포심 보정(표시 전용) */}
@@ -229,12 +195,13 @@ export function PitcherCard({
                 >
                   {active === 'dual' ? '듀얼 잠재력' : '잠재력'}
                 </span>
-                <div className="flex flex-wrap gap-1">
+                {/* 한 줄 고정 — 넘치면 각 뱃지가 줄어들며 … 처리 */}
+                <div className="flex min-w-0 gap-1 overflow-hidden">
                   {potentials.map((x) => (
                     <HoverTip key={x} tip={potTip(x)} tint="var(--green)">
                       <span
                         onClick={(e) => goPotential(e, x)}
-                        className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold cursor-pointer text-[color:var(--green)]"
+                        className="truncate rounded border px-1.5 py-[1px] text-[.7rem] font-semibold cursor-pointer text-[color:var(--green)]"
                         style={
                           hit(x)
                             ? { borderColor: 'var(--gold)', color: 'var(--gold)' }
@@ -281,7 +248,7 @@ export function PitcherCard({
   )
 }
 
-/** 듀얼 포지션 선택 탭 (카드 열림과 분리 — 클릭 전파 차단). hit = 포지션 검색 매칭 강조 */
+/** 듀얼 포지션 세그먼트 탭 — 활성=금색 채움, 클릭 범위 넓게(패딩). hit = 포지션 검색 매칭 강조 */
 function PosTab({ label, active, hit, onSelect }: { label: string; active: boolean; hit?: boolean; onSelect: () => void }) {
   return (
     <button
@@ -290,14 +257,14 @@ function PosTab({ label, active, hit, onSelect }: { label: string; active: boole
         e.stopPropagation()
         onSelect()
       }}
-      className="font-semibold cursor-pointer transition"
+      className="px-2.5 py-1 text-[.72rem] font-semibold cursor-pointer transition whitespace-nowrap"
       style={{
-        ...(active
-          ? { color: 'var(--gold)', borderBottom: '2px solid var(--gold)' }
-          : { color: 'var(--ink-faint)', borderBottom: '2px solid transparent' }),
-        ...(hit
-          ? { color: 'var(--gold)', background: 'color-mix(in srgb, var(--gold) 16%, transparent)', borderRadius: 4, padding: '0 4px' }
-          : {}),
+        background: active
+          ? 'var(--gold)'
+          : hit
+            ? 'color-mix(in srgb, var(--gold) 16%, transparent)'
+            : 'var(--surface)',
+        color: active ? 'var(--surface)' : hit ? 'var(--gold)' : 'var(--ink-faint)',
       }}
     >
       {label}
