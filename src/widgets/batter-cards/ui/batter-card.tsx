@@ -5,7 +5,7 @@ import { WeatherIcon, WEATHER_COLOR } from '@features/weather-picker/ui/icons'
 import { gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { batterDualDelta } from '@shared/config/dual-position'
-import { Badge } from '@shared/ui'
+import { Badge, TeamMark } from '@shared/ui'
 
 /** 스탯 배치 = 게임 고급카드 순서 (열: 파워/컨택 · 스피드/스로잉 · 수비력/클러치) */
 const STAT_CELLS: { label: string; key: keyof Batter }[] = [
@@ -91,7 +91,10 @@ export function BatterCard({ b, codes, onClick }: { b: Batter; codes: CodeMap | 
 
       {/* 팀 / 포지션(듀얼=선택 토글) · 연도 */}
       <div className="mt-0.5 flex items-center gap-2 text-[.76rem]">
-        <span className="text-ink-soft">{codeLabel(codes, 'team', b.team_code) || b.team_code}</span>
+        <span className="flex items-center gap-1 text-ink-soft">
+          <TeamMark code={b.team_code} className="h-4 w-4 shrink-0 object-contain" />
+          {codeLabel(codes, 'team', b.team_code) || b.team_code}
+        </span>
         <span className="ml-auto flex items-center gap-1">
           {hasDual ? (
             <>

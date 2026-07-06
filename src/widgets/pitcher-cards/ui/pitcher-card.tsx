@@ -6,7 +6,7 @@ import { gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { PITCH_KEYS } from '@shared/config/domain'
 import { pitcherDualDelta } from '@shared/config/dual-position'
-import { Badge } from '@shared/ui'
+import { Badge, TeamMark } from '@shared/ui'
 
 /** 구종 표시명 = 특이구종이면 고유명, 아니면 계열명 */
 const pitchLabel = (p: { pitch_type: string; is_special: boolean; special_name: string | null }) =>
@@ -135,7 +135,10 @@ export function PitcherCard({ p, codes, onClick }: { p: PitcherWithPitches; code
 
         {/* 팀 / 포지션(듀얼=선택 토글) · 연도 */}
         <div className="mt-0.5 flex items-center gap-2 text-[.76rem]">
-          <span className="text-ink-soft">{codeLabel(codes, 'team', p.team_code) || p.team_code}</span>
+          <span className="flex items-center gap-1 text-ink-soft">
+            <TeamMark code={p.team_code} className="h-4 w-4 shrink-0 object-contain" />
+            {codeLabel(codes, 'team', p.team_code) || p.team_code}
+          </span>
           <span className="ml-auto flex items-center gap-1">
             {hasDual ? (
               <>
