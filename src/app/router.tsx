@@ -5,6 +5,8 @@ import { BatterEditPage } from '@pages/batter-edit'
 import { PitchersPage } from '@pages/pitchers'
 import { PitcherEditPage } from '@pages/pitcher-edit'
 import { PotentialsPage } from '@pages/potentials'
+import { RostersPage } from '@pages/rosters'
+import { RosterEditPage } from '@pages/roster-edit'
 import { AuthGuard } from './auth-guard'
 
 export const router = createHashRouter([
@@ -20,6 +22,8 @@ export const router = createHashRouter([
       { path: 'pitchers/new', element: <PitcherEditPage /> },
       { path: 'pitchers/:id', element: <PitcherEditPage /> },
       { path: 'potentials', element: <PotentialsPage /> },
+      { path: 'rosters', element: <RostersPage /> },
+      { path: 'rosters/:id', element: <RosterEditPage /> },
     ],
   },
   { path: '*', element: <Navigate to="/batters" replace /> },

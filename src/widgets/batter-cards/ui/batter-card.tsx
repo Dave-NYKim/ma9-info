@@ -4,6 +4,7 @@ import type { Batter } from '@entities/batter'
 import { codeLabel, type CodeMap } from '@entities/code'
 import { useBatterPotentialMap, PotentialTipBody, hasPotentialTip } from '@entities/potential'
 import { WeatherIcon, WEATHER_COLOR } from '@features/weather-picker/ui/icons'
+import { AddToPoolButton } from '@features/add-to-pool'
 import { gradeBarBg, gradeCardBg, gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { batterDualDelta } from '@shared/config/dual-position'
@@ -242,6 +243,7 @@ export function BatterCard({
         </div>
       )}
       </div>
+      <AddToPoolButton kind="batter" id={b.id} name={b.name} />
     </div>
   )
 }

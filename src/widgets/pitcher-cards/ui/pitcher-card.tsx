@@ -4,6 +4,7 @@ import type { PitcherWithPitches } from '@entities/pitcher'
 import { codeLabel, type CodeMap } from '@entities/code'
 import { usePitcherPotentialMap, PotentialTipBody, hasPotentialTip } from '@entities/potential'
 import { WeatherIcon, WEATHER_COLOR } from '@features/weather-picker/ui/icons'
+import { AddToPoolButton } from '@features/add-to-pool'
 import { gradeBarBg, gradeCardBg, gradeCssVar, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
 import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { PITCH_KEYS } from '@shared/config/domain'
@@ -244,6 +245,7 @@ export function PitcherCard({
           </div>
         )}
       </div>
+      <AddToPoolButton kind="pitcher" id={p.id} name={p.name} />
     </div>
   )
 }

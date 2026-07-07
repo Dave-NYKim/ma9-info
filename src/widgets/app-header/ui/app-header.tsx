@@ -42,6 +42,7 @@ export function AppHeader() {
           <Tab to="/batters">타자</Tab>
           <Tab to="/pitchers">투수</Tab>
           <Tab to="/potentials">잠재력</Tab>
+          <Tab to="/rosters">팀</Tab>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-[.8rem] text-ink-soft">
           {s.email && (
