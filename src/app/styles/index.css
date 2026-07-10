@@ -4,7 +4,7 @@
 
 /* ===== 디자인 토큰 — 가독성 최우선 중립 쿨그레이 (다크=GitHub Primer 계열 · 눈부심/탁함 없음) ===== */
 :root {
-  --ground:#f2f4f7; --surface:#fff; --surface-2:#f6f8fa; --surface-3:#eef1f4;
+  --ground:#f2f4f7; --surface:#fbfcff; --surface-2:#f2f6fc; --surface-3:#e9eff8;
   --ink:#1f2328; --ink-soft:#57606a; --ink-faint:#848d97;
   --line:#d8dde3; --line-strong:#c3cad2;
   --clay:#bf5233; --blue:#3a6b8a; --gold:#8a6d2f; --green:#2f8f6b; --purple:#7a6cc4;
@@ -17,7 +17,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground:#0e1117; --surface:#161b22; --surface-2:#1c2128; --surface-3:#22272e;
+    --ground:#0e1117; --surface:#151d2e; --surface-2:#1a2438; --surface-3:#202c44;
     --ink:#e6edf3; --ink-soft:#adb6c0; --ink-faint:#7d8590; --line:#2d333b; --line-strong:#414a55;
     --clay:#e07a54; --blue:#74a9c9; --gold:#d1a955; --green:#5cc79a; --purple:#a99ce6;
     --sun:#e6bb45; --rain:#6ea3d4; --snow:#94c2e4; --cloud:#9aa6ad; --none:#57c46f;
@@ -25,8 +25,8 @@
     --shadow:0 1px 2px rgba(0,0,0,.3),0 14px 34px -20px rgba(0,0,0,.8);
   }
 }
-:root[data-theme="light"] { --ground:#f2f4f7; --surface:#fff; --surface-2:#f6f8fa; --surface-3:#eef1f4; --ink:#1f2328; --ink-soft:#57606a; --ink-faint:#848d97; --line:#d8dde3; --line-strong:#c3cad2; --clay:#bf5233; --g-b:#14171c; --g-sg:#3ec3f0; --g-e:#5b4ae0; }
-:root[data-theme="dark"]  { --ground:#0e1117; --surface:#161b22; --surface-2:#1c2128; --surface-3:#22272e; --ink:#e6edf3; --ink-soft:#adb6c0; --ink-faint:#7d8590; --line:#2d333b; --line-strong:#414a55; --clay:#e07a54; --g-b:#2b3138; --g-sg:#62d3ff; --g-e:#7d6ef0; }
+:root[data-theme="light"] { --ground:#f2f4f7; --surface:#fbfcff; --surface-2:#f2f6fc; --surface-3:#e9eff8; --ink:#1f2328; --ink-soft:#57606a; --ink-faint:#848d97; --line:#d8dde3; --line-strong:#c3cad2; --clay:#bf5233; --g-b:#14171c; --g-sg:#3ec3f0; --g-e:#5b4ae0; }
+:root[data-theme="dark"]  { --ground:#0e1117; --surface:#151d2e; --surface-2:#1a2438; --surface-3:#202c44; --ink:#e6edf3; --ink-soft:#adb6c0; --ink-faint:#7d8590; --line:#2d333b; --line-strong:#414a55; --clay:#e07a54; --g-b:#2b3138; --g-sg:#62d3ff; --g-e:#7d6ef0; }
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -66,6 +66,37 @@ body {
   animation: lineup-bar-shine 2.2s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) { .lineup-bar-shine::after { animation: none; } }
+
+/* 이름 날개(SG/B) — 숨쉬듯 커지는 스케일 + 오로라 글로우.
+   flip 은 inline transform 대신 --flip 변수로 (keyframe transform 이 inline 을 덮어쓰므로). */
+@keyframes wing-aurora-sg {
+  0%   { transform: scaleX(var(--flip,1)) scale(1);    filter: drop-shadow(0 0 2px rgba(62,195,240,.9))  drop-shadow(0 0 5px rgba(62,195,240,.45)); }
+  33%  { transform: scaleX(var(--flip,1)) scale(1.18); filter: drop-shadow(0 0 3px rgba(167,139,250,.95)) drop-shadow(0 0 8px rgba(167,139,250,.55)); }
+  66%  { transform: scaleX(var(--flip,1)) scale(1.08); filter: drop-shadow(0 0 3px rgba(244,114,182,.95)) drop-shadow(0 0 8px rgba(244,114,182,.55)); }
+  100% { transform: scaleX(var(--flip,1)) scale(1);    filter: drop-shadow(0 0 2px rgba(62,195,240,.9))  drop-shadow(0 0 5px rgba(62,195,240,.45)); }
+}
+.wing-aurora-sg { transform: scaleX(var(--flip,1)); animation: wing-aurora-sg 2.8s ease-in-out infinite; transform-origin: center; will-change: transform, filter; }
+
+@keyframes wing-aurora-b {
+  0%   { transform: scaleX(var(--flip,1)) scale(1);    filter: drop-shadow(0 0 2px rgba(255,214,90,.95)) drop-shadow(0 0 5px rgba(201,165,74,.5)); }
+  50%  { transform: scaleX(var(--flip,1)) scale(1.18); filter: drop-shadow(0 0 4px rgba(255,240,180,1))  drop-shadow(0 0 9px rgba(255,214,90,.65)); }
+  100% { transform: scaleX(var(--flip,1)) scale(1);    filter: drop-shadow(0 0 2px rgba(255,214,90,.95)) drop-shadow(0 0 5px rgba(201,165,74,.5)); }
+}
+.wing-aurora-b { transform: scaleX(var(--flip,1)); animation: wing-aurora-b 2.4s ease-in-out infinite; transform-origin: center; will-change: transform, filter; }
+
+@media (prefers-reduced-motion: reduce) { .wing-aurora-sg, .wing-aurora-b { animation: none; } }
+
+/* 이름 날개 잔상 — 본체 뒤에서 커지며 바깥쪽으로 퍼져 사라짐.
+   scaleX(--flip) 이 바깥에 있어 translateX(-8px)가 왼쪽 날개=왼쪽, 오른쪽(미러) 날개=오른쪽으로 자동 반전. */
+@keyframes wing-ghost {
+  0%   { opacity: .95; transform: scaleX(var(--flip,1)) translateX(-1px)  scale(1.15); }
+  85%  { opacity: 0;   transform: scaleX(var(--flip,1)) translateX(-11px) scale(2.2); }
+  100% { opacity: 0;   transform: scaleX(var(--flip,1)) translateX(-11px) scale(2.2); }
+}
+.wing-ghost-sg, .wing-ghost-b { opacity: 0; transform-origin: center; pointer-events: none; will-change: transform, opacity; }
+.wing-ghost-sg { animation: wing-ghost 2.8s ease-out infinite; filter: blur(.3px) drop-shadow(0 0 5px rgba(62,195,240,.9)); }
+.wing-ghost-b  { animation: wing-ghost 2.4s ease-out infinite; filter: blur(.3px) drop-shadow(0 0 5px rgba(255,214,90,.9)); }
+@media (prefers-reduced-motion: reduce) { .wing-ghost-sg, .wing-ghost-b { animation: none; } }
 
 /* 등급 마크 반짝임 — 단색 배경(SG 파랑·B 검정)은 그대로, 그 위로 광택(SG 흰·B 노랑)이 계속 흐른다.
    글자는 z-1 로 위에 두어 또렷하게 유지. --shine = 광택색. */

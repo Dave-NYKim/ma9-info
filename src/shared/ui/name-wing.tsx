@@ -1,14 +1,20 @@
-import { useId } from 'react'
+import { useId, type CSSProperties } from 'react'
 
-/** 실카드 이름 옆 장식 (SVG 재현) — SG=월계수 잎(시안·퍼플·흰빛 홀로) · B=금색 깃털 날개(층층 깃털+말린 머리).
- *  기본 = 왼쪽 장식(바깥으로 펼침), flip = 오른쪽(미러). */
-export function NameWing({ variant, flip, className }: { variant: 'SG' | 'B'; flip?: boolean; className?: string }) {
-  const id = useId()
-  const style = flip ? { transform: 'scaleX(-1)' as const } : undefined
-
+/** 날개 SVG 본체 — 그라데이션 id 충돌 방지를 위해 인스턴스별 id 주입 (본체/잔상이 각자 다른 id 사용) */
+function WingSvg({
+  variant,
+  id,
+  className,
+  style,
+}: {
+  variant: 'SG' | 'B'
+  id: string
+  className?: string
+  style?: CSSProperties
+}) {
   if (variant === 'B')
     return (
-      <svg width={15} height={13} viewBox="0 0 26 22" className={className} aria-hidden style={style}>
+      <svg width={15} height={13} viewBox="0 0 26 22" className={className} style={style} aria-hidden>
         <defs>
           <linearGradient id={id} x1="0.15" y1="0" x2="0.6" y2="1">
             <stop offset="0%" stopColor="#f8e79e" />
@@ -29,19 +35,17 @@ export function NameWing({ variant, flip, className }: { variant: 'SG' | 'B'; fl
     )
 
   // 시그니처 — V자 잎 2장 + 아래 가로 잎. 실카드처럼 좌우 팔레트가 다름(왼쪽 핑크·마젠타 / 오른쪽 그린·퍼플)
-  const pal = flip
-    ? { side: ['#b2e878', '#6fc73c'], base: ['#b787ef', '#8546d4'] }
-    : { side: ['#ffc4e0', '#f57ab5'], base: ['#f0559c', '#c22572'] }
+  // 미러는 CSS(--flip)로 처리하므로 팔레트는 왼쪽 기준 고정, 오른쪽 팔레트는 부모(NameWing)에서 flip 시 결정.
   return (
-    <svg width={14} height={14} viewBox="0 0 21 21" className={className} aria-hidden style={style}>
+    <svg width={14} height={14} viewBox="0 0 21 21" className={className} style={style} aria-hidden>
       <defs>
         <linearGradient id={`${id}s`} x1="0" y1="0" x2="0.5" y2="1">
-          <stop offset="0%" stopColor={pal.side[0]} />
-          <stop offset="100%" stopColor={pal.side[1]} />
+          <stop offset="0%" stopColor="var(--wing-s0)" />
+          <stop offset="100%" stopColor="var(--wing-s1)" />
         </linearGradient>
         <linearGradient id={`${id}b`} x1="0" y1="0" x2="0.6" y2="1">
-          <stop offset="0%" stopColor={pal.base[0]} />
-          <stop offset="100%" stopColor={pal.base[1]} />
+          <stop offset="0%" stopColor="var(--wing-b0)" />
+          <stop offset="100%" stopColor="var(--wing-b1)" />
         </linearGradient>
         <linearGradient id={`${id}w`} x1="0" y1="0" x2="0.4" y2="1">
           <stop offset="0%" stopColor="#ffffff" />
@@ -55,5 +59,49 @@ export function NameWing({ variant, flip, className }: { variant: 'SG' | 'B'; fl
       {/* 오른쪽 위 색 잎 */}
       <path d="M12.5 14.5 C 13 9, 15.5 4, 19.5 1.8 C 19 6.5, 16.5 11.5, 12.5 14.5 Z" fill={`url(#${id}s)`} />
     </svg>
+  )
+}
+
+/** 실카드 이름 옆 장식 — SG=월계수 잎 · B=금색 깃털 날개. flip = 오른쪽(미러, --flip 변수).
+ *  animated(베테랑 전용) = wing-aurora-*(숨쉬는 스케일 + 오로라 글로우) + wing-ghost-*(바깥쪽으로 퍼지는 잔상).
+ *  기본(미지정) = 정적 날개 — 목록 카드 등 육성 정보 없는 곳. */
+export function NameWing({
+  variant,
+  flip,
+  animated = false,
+  className,
+}: {
+  variant: 'SG' | 'B'
+  flip?: boolean
+  /** 베테랑 체크된 선수만 true — 오로라 + 잔상 활성 */
+  animated?: boolean
+  className?: string
+}) {
+  const id = useId()
+  // SG 팔레트: 왼쪽 = 핑크·마젠타 / 오른쪽(flip) = 그린·퍼플 (실카드 동일)
+  const pal = flip
+    ? { s0: '#b2e878', s1: '#6fc73c', b0: '#b787ef', b1: '#8546d4' }
+    : { s0: '#ffc4e0', s1: '#f57ab5', b0: '#f0559c', b1: '#c22572' }
+  const style = {
+    ['--flip']: flip ? -1 : 1,
+    ['--wing-s0']: pal.s0,
+    ['--wing-s1']: pal.s1,
+    ['--wing-b0']: pal.b0,
+    ['--wing-b1']: pal.b1,
+  } as CSSProperties
+  const aurora = variant === 'B' ? 'wing-aurora-b' : 'wing-aurora-sg'
+  const ghost = variant === 'B' ? 'wing-ghost-b' : 'wing-ghost-sg'
+  return (
+    <span className={className ? `relative inline-flex ${className}` : 'relative inline-flex'} style={style} aria-hidden>
+      {/* 잔상 — 본체 뒤에서 커지며 바깥쪽으로 (베테랑 전용) */}
+      {animated && <WingSvg variant={variant} id={`${id}g`} className={`absolute inset-0 ${ghost}`} />}
+      {/* 본체 — 베테랑이면 오로라, 아니면 정적 (flip 은 inline transform, 애니메이션 시 keyframe 이 덮음) */}
+      <WingSvg
+        variant={variant}
+        id={id}
+        className={animated ? aurora : undefined}
+        style={animated ? undefined : { transform: 'scaleX(var(--flip,1))' }}
+      />
+    </span>
   )
 }

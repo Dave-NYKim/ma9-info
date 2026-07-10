@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { slotView, type RosterSlot } from '@entities/roster'
-import { gradeBarBg, gradeCardBgSoft, gradeCssVar } from '@shared/config/grades'
+import { gradeCardBgSoft, gradeCssVar } from '@shared/config/grades'
 import { parseProspect } from '@shared/config/prospects'
 import { LINEUP_SIZE } from '@shared/config/roster'
 import { statTier, STAT5, type Stat5, type Stats5, type Growth } from '@shared/config/team-stats'
@@ -41,7 +41,6 @@ const TEXT_ROWS = ['잠재력', '베테랑', '감독훈련', '장비', '체형',
 // 잠재력=초록 · 베테랑(부잠재)=보라 (선수 카드 리스트와 동일)
 const ROW_COLOR: Record<number, string> = { 0: 'var(--green)', 1: 'var(--purple)' }
 
-const gradeBar = (g: string | null) => (g ? gradeBarBg(g) : 'var(--green)')
 const cardBg = (g: string | null) => (g ? gradeCardBgSoft(g) : 'color-mix(in srgb, var(--green) 9%, var(--surface))')
 const cardBorder = (g: string | null) => (g ? `var(${gradeCssVar(g)})` : 'var(--green)')
 
@@ -57,6 +56,7 @@ interface Col {
   levelup: string // 레벨업 유형 (예: 파워/쓰로잉)
   final: Stats5 | null
   potential: string // 잠재력 행 = 선택된 주잠재(유망주는 설정의 잠재력)
+  vet: boolean // 베테랑 체크 여부 — 날개 오로라·잔상 활성 조건
   veteranPot: string // 베테랑 행 = 베테랑 체크 시 부잠재, 아니면 '-'
   awaken: string // 각성 행 = 'O' 또는 '-'
   coach: string
@@ -141,17 +141,19 @@ function PlayerColumn({
     onDrop: () => void
   }
 }) {
-  const isSpecial = c.grade === 'SG' || c.grade === 'B' // 이름 날개 + 글로우 + 배경 전체 광택
-  // 배경 광택 스윕: 시그=흰색(아주 옅게, 안튀게) · 블랙=금색 — 세기를 서로 비슷하게 맞춤
+  const isSpecial = c.grade === 'SG' || c.grade === 'B' // 이름 날개 + 글로우 + 광택 (전부 안쪽 박스에)
+  // 카드 바깥은 전 카드 완전 동일 — 등급 효과(틴트·테두리·광택·글로우)는 안쪽 선수정보 박스에 몰빵
+  const cardStyle: CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)' }
+  // 광택 스윕 색: 시그=흰색(아주 옅게) · 블랙=금색
   const shineColor = c.grade === 'SG' ? 'rgba(255,255,255,.22)' : c.grade === 'B' ? 'rgba(255,214,90,.5)' : undefined
-  const cardStyle: CSSProperties = c.filled
+  const identStyle: CSSProperties = c.filled
     ? {
         background: cardBg(c.grade),
-        border: `1px solid ${cardBorder(c.grade)}`,
-        boxShadow: c.grade === 'SG' ? '0 0 10px rgba(98,211,255,.25)' : c.grade === 'B' ? '0 0 10px rgba(201,165,74,.22)' : undefined,
+        border: `1.5px solid ${cardBorder(c.grade)}`,
+        boxShadow: c.grade === 'SG' ? '0 0 8px rgba(98,211,255,.35)' : c.grade === 'B' ? '0 0 8px rgba(201,165,74,.3)' : undefined,
         ...(shineColor ? { ['--shine']: shineColor } : {}),
       }
-    : { background: 'var(--surface)', border: '1px solid var(--line)' }
+    : { border: '1px dashed color-mix(in srgb, var(--ink) 24%, transparent)' }
   const canDrag = !!drag?.canDrag
   const draggable = canDrag && c.filled
 
@@ -175,13 +177,11 @@ function PlayerColumn({
             }
           : undefined
       }
-      className={`relative flex-1 min-w-[82px] rounded-md overflow-hidden${isSpecial ? ' grade-shine' : ''}${
+      className={`relative flex-1 min-w-[82px] rounded-md overflow-hidden${
         drag?.dragging ? ' opacity-40' : ''
       }${drag?.isOver ? ' outline outline-2 outline-[color:var(--accent)]' : ''}`}
       style={cardStyle}
     >
-      {/* 상단 등급 바 (absolute — 행 정렬에 영향 없음) */}
-      {c.filled && <div className="absolute top-0 left-0 right-0 h-[3px] z-[3]" style={{ background: gradeBar(c.grade) }} />}
       <div className="relative z-[1]">
         {/* 헤더 N번 타자 (노란색) — 여기서만 드래그(그립) */}
         <div
@@ -204,11 +204,13 @@ function PlayerColumn({
           {draggable && <span style={{ opacity: 0.65 }}>⠿</span>}
           {c.order}번 타자
         </div>
-        {/* 선수 정보 박스 — 포지션 · 이름(시그/블랙 = 날개) · 좌투우타 · 레벨업 */}
+        {/* 선수 정보 박스 — 등급 효과(틴트·테두리·광택·글로우) 전부 여기에만 */}
         <div style={{ height: H.ident }} className="p-1">
           <div
-            className="h-full rounded flex flex-col items-center justify-center"
-            style={{ border: '1px dashed color-mix(in srgb, var(--ink) 24%, transparent)' }}
+            className={`relative overflow-hidden h-full rounded flex flex-col items-center justify-center${
+              c.filled && isSpecial ? ' grade-shine' : ''
+            }`}
+            style={identStyle}
           >
             {c.filled ? (
               <>
@@ -216,11 +218,11 @@ function PlayerColumn({
                   {c.pos}
                 </span>
                 <span className="mt-1 flex items-center gap-0.5 max-w-full">
-                  {isSpecial && <NameWing variant={c.grade as 'SG' | 'B'} className="shrink-0" />}
+                  {isSpecial && <NameWing variant={c.grade as 'SG' | 'B'} animated={c.vet} className="shrink-0" />}
                   <span style={{ color: 'var(--ink)' }} className="text-[.7rem] font-bold leading-none truncate">
                     {c.name}
                   </span>
-                  {isSpecial && <NameWing variant={c.grade as 'SG' | 'B'} flip className="shrink-0" />}
+                  {isSpecial && <NameWing variant={c.grade as 'SG' | 'B'} flip animated={c.vet} className="shrink-0" />}
                 </span>
                 <span style={{ color: 'var(--ink-soft)' }} className="mt-1 text-[.6rem] font-semibold leading-none">
                   {c.year ? `${c.year} · ${c.hands}` : c.hands}
@@ -309,6 +311,7 @@ export function LineupSheet({
         levelup: '',
         final: null,
         potential: '-',
+        vet: false,
         veteranPot: '-',
         awaken: '-',
         coach: '-',
@@ -338,6 +341,7 @@ export function LineupSheet({
       levelup: view.levelup ?? '',
       final: e.stats.final,
       potential: (isProspect ? prospect?.potential : growth?.selected_potential) || '-',
+      vet: !isProspect && !!growth?.veteran,
       veteranPot: !isProspect && growth?.veteran ? subPot ?? '-' : '-',
       awaken: awakened ? 'O' : '-',
       coach: coach && coach !== '해당없음' ? coach : '-',
