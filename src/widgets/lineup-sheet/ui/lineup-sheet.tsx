@@ -150,7 +150,13 @@ function PlayerColumn({
     ? {
         background: cardBg(c.grade),
         border: `1.5px solid ${cardBorder(c.grade)}`,
-        boxShadow: c.grade === 'SG' ? '0 0 8px rgba(98,211,255,.35)' : c.grade === 'B' ? '0 0 8px rgba(201,165,74,.3)' : undefined,
+        // B = 검정 테두리 바깥 흰 헤어라인(어두운 배경에서도 또렷) + 금 글로우
+        boxShadow:
+          c.grade === 'SG'
+            ? '0 0 8px rgba(98,211,255,.35)'
+            : c.grade === 'B'
+              ? '0 0 0 1px rgba(255,255,255,.45), 0 0 8px rgba(201,165,74,.3)'
+              : undefined,
         ...(shineColor ? { ['--shine']: shineColor } : {}),
       }
     : { border: '1px dashed color-mix(in srgb, var(--ink) 24%, transparent)' }

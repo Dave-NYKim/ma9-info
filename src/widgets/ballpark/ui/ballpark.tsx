@@ -176,6 +176,8 @@ function FilledChip({
         top: `${y}%`,
         borderColor: gradeColor,
         background: `color-mix(in srgb, ${gradeColor} 14%, var(--surface))`,
+        // B = 검정 테두리 바깥 흰 헤어라인 (어두운 필드 위 식별)
+        ...(v.grade === 'B' ? { boxShadow: '0 0 0 1px rgba(255,255,255,.45), var(--shadow)' } : {}),
         ...(sheen ? { ['--shine']: v.grade === 'SG' ? 'rgba(255,255,255,.75)' : 'rgba(255,214,90,.8)' } : {}),
       } as CSSProperties}
       title={

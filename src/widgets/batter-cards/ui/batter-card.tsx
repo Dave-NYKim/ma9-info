@@ -104,6 +104,8 @@ export function BatterCard({
       style={{
         background: gradeCardBg(b.grade),
         borderColor: gradeColor,
+        // B = 검정 테두리 바깥 흰 헤어라인 (다크 배경에서 테두리 식별)
+        ...(b.grade === 'B' ? { boxShadow: '0 0 0 1px rgba(255,255,255,.45), var(--shadow)' } : {}),
       }}
     >
       {/* 팀 로고 워터마크 (배경) */}
