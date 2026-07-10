@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { Batter } from '@entities/batter'
-import type { RosterProspectRow } from '@entities/roster'
+import { positionFit, type RosterProspectRow } from '@entities/roster'
 import { usePool, usePlayerSearch, useAddToPool, useRemoveFromPool, type PoolPlayer } from '@entities/pool'
-import { GRADES, gradeCssVar } from '@shared/config/grades'
+import { GRADES, gradeCssVar, gradeName } from '@shared/config/grades'
+import { LINEUP_POSITIONS, type LineupPosition } from '@shared/config/roster'
 import { prospectHasGrowth, type Prospect } from '@shared/config/prospects'
 import { STAT5, STAT5_LABEL, statTier, type Growth, type Stat5 } from '@shared/config/team-stats'
 import type { SlotStats } from '@shared/lib/stat-engine'
 import { useDebounced } from '@shared/lib/use-debounced'
 import { cn } from '@shared/lib/cn'
-import { Button, HoverTip, Input, Panel, Segmented } from '@shared/ui'
-import { CompareModal } from './compare-modal'
+import { Button, GradeMark, HoverTip, Input, Panel, Segmented } from '@shared/ui'
+import { CompareModal, type CmpEntry } from './compare-modal'
 
 const APPLIED_KEYS = new Set<string>(STAT5)
 
@@ -22,47 +23,77 @@ interface Col {
   num?: boolean
 }
 const CMP_COL: Col = { key: '_cmp', label: '⚖' }
+/** 파생 컬럼(선수 필드가 아님) — 정렬 대상에서 제외 */
+const NO_SORT = new Set(['_cmp', '_lv', '_vetsw'])
 const BATTER_COLS: Col[] = [
   { key: 'grade', label: '등급' },
+  { key: 'year', label: '연도', num: true },
   { key: 'name', label: '이름' },
   { key: 'team_code', label: '팀' },
   { key: 'position', label: '포지션' },
-  { key: '_growth', label: '육성' },
+  { key: '_lv', label: 'Lv' },
+  { key: '_vetsw', label: '베테랑(강/약)' },
   { key: 'power', label: '파워', num: true },
   { key: 'contact', label: '컨택', num: true },
   { key: 'speed', label: '스핏', num: true },
   { key: 'throwing', label: '쓰로', num: true },
   { key: 'defense', label: '수비', num: true },
   { key: 'clutch', label: '클러', num: true },
-  { key: 'year', label: '연도', num: true },
 ]
 const PITCHER_COLS: Col[] = [
   { key: 'grade', label: '등급' },
+  { key: 'year', label: '연도', num: true },
   { key: 'name', label: '이름' },
   { key: 'team_code', label: '팀' },
   { key: 'position', label: '포지션' },
   { key: 'stamina', label: '체력', num: true },
   { key: 'control', label: '제구', num: true },
   { key: 'levelup_pitch', label: '성장' },
-  { key: 'year', label: '연도', num: true },
 ]
 
 const gradeRank = (code: string) => GRADES.findIndex((g) => g.code === code)
 
-/** 등급 글자 — 블랙(B)·시그(SG)는 너무 어두워/연해서 테두리(글자 크기 동일). 나머지는 등급색 글자. */
-function GradeText({ g }: { g: string }) {
-  if (g === 'B' || g === 'SG') {
-    const border = g === 'B' ? 'var(--g-l)' : 'var(--g-sg)' // 블랙=골드 · 시그=하늘색
-    return (
-      <span className="font-extrabold rounded-[3px] border px-1 leading-none" style={{ borderColor: border, color: 'var(--ink)' }}>
-        {g}
-      </span>
-    )
-  }
+/** 풀 안에서 라인업 포지션 지정/이동 — 야구장 안 가고 바로. 현재 자리=액센트, 주=기본/듀얼=금/불일치=흐림. */
+function PositionChips({
+  fitOf,
+  current,
+  onPick,
+}: {
+  fitOf: (pos: LineupPosition) => 'main' | 'dual' | 'off'
+  current: string | null
+  onPick: (pos: LineupPosition) => void
+}) {
   return (
-    <span className="font-extrabold" style={{ color: `var(${gradeCssVar(g)})` }}>
-      {g}
-    </span>
+    <div className="flex flex-wrap items-center gap-1">
+      <span className="mr-0.5 text-[.66rem] font-bold text-ink-faint">포지션</span>
+      {LINEUP_POSITIONS.map((pos) => {
+        const active = current === pos
+        const fit = fitOf(pos)
+        return (
+          <button
+            key={pos}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onPick(pos)
+            }}
+            className={cn(
+              'min-w-[2rem] rounded border px-1 py-[2px] text-center text-[.66rem] font-bold tabular-nums transition cursor-pointer',
+              active
+                ? 'border-transparent bg-[color:var(--accent)] text-[color:var(--accent-tx)]'
+                : fit === 'main'
+                  ? 'border-line-strong bg-surface text-ink-soft hover:bg-surface-2'
+                  : fit === 'dual'
+                    ? 'border-[color:var(--gold)] text-[color:var(--gold)] hover:bg-surface-2'
+                    : 'border-line text-ink-faint hover:bg-surface-2',
+            )}
+            title={active ? '현재 배치' : fit === 'off' ? `${pos} · 수비 페널티` : fit === 'dual' ? `${pos} · 듀얼` : pos}
+          >
+            {pos}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -88,6 +119,83 @@ export function growthSummary(g: Growth): string[] {
   return parts
 }
 
+/** 베테랑(강/약) 셀 — 일반 카드: 베테랑 여부(베테랑/-) · 유망주: 강/약 훈련 단계(완벽/일반). */
+function VetSwCell(
+  props:
+    | { kind: 'card'; veteran: boolean; title?: string }
+    | { kind: 'prospect'; strength: string; weakness: string },
+) {
+  if (props.kind === 'card')
+    return (
+      <span
+        className={cn('text-[.74rem] font-bold', props.veteran ? 'text-[color:var(--gold)]' : 'text-ink-faint')}
+        title={props.title}
+      >
+        {props.veteran ? '베테랑' : '-'}
+      </span>
+    )
+  const step = (s: string, colorVar: string) =>
+    s !== '-' ? (
+      <span className="font-semibold" style={{ color: `var(${colorVar})` }}>
+        {s}
+      </span>
+    ) : (
+      <span className="text-ink-faint">-</span>
+    )
+  return (
+    <span className="whitespace-nowrap text-[.72rem]">
+      {step(props.strength, '--green')}
+      <span className="text-ink-faint">/</span>
+      {step(props.weakness, '--clay')}
+    </span>
+  )
+}
+
+/** 비교 엔트리 빌더 — 일반 카드 (최종 스탯 = 라인업 적용값 우선, 없으면 카드 기본) */
+function batterToCmp(r: PoolPlayer, applied?: Map<string, SlotStats>, growthInfo?: Map<string, Growth>): CmpEntry {
+  const b = r.batter!
+  const s = r.batter_id ? applied?.get(r.batter_id) : undefined
+  const g = r.batter_id ? growthInfo?.get(r.batter_id) : undefined
+  const final = {} as Record<Stat5, number>
+  for (const k of STAT5) final[k] = s?.final[k] ?? b[k] ?? 0
+  return {
+    name: b.name,
+    gradeCode: b.grade,
+    gradeLabel: `${b.grade} · ${gradeName(b.grade)}`,
+    sub: `${b.team_code}${b.year != null ? ` · ${b.year}` : ''} · ${b.dual_position ? `${b.position}/${b.dual_position}` : b.position} · ${b.throw_hand}/${b.bat_hand}`,
+    applied: !!s,
+    final,
+    clutch: b.clutch ?? 0,
+    potentials: {
+      main: [b.potential1, b.potential2, b.potential3].filter((x): x is string => !!x),
+      sub: b.sub_potential,
+      dual: [b.dual_potential1, b.dual_potential2, b.dual_potential3].filter((x): x is string => !!x),
+      dualSub: b.dual_sub_potential,
+    },
+    growthChips: g ? growthSummary(g) : [],
+    growthTitle: g && g.coach_training !== '해당없음' ? `감독훈련: ${g.coach_training}` : undefined,
+  }
+}
+
+/** 비교 엔트리 빌더 — 유망주 (클러치·등급·잠재력 없음, 5스탯 최종값만) */
+function prospectToCmp(it: ProspectItem): CmpEntry {
+  const { parsed: p, stats } = it
+  const final = {} as Record<Stat5, number>
+  for (const k of STAT5) final[k] = stats.final[k]
+  return {
+    name: p.name,
+    gradeCode: null,
+    gradeLabel: '유망주',
+    sub: `${p.position} · ${p.throw_hand}/${p.bat_hand}`,
+    applied: it.pos != null,
+    final,
+    clutch: null,
+    potentials: null,
+    growthChips: prospectSummary(p),
+    growthTitle: undefined,
+  }
+}
+
 /** 내 풀(비교 작업대) — 담기 검색 · 타자/투수 탭 · 정렬 테이블 · 행 선택 → 포지션 배치/제거 */
 export interface ProspectItem {
   row: RosterProspectRow
@@ -101,6 +209,8 @@ export function PoolPanel({
   lineupPos,
   editable,
   onGrowth,
+  onAssign,
+  onAssignProspect,
   applied,
   growthInfo,
   teamAvg,
@@ -115,6 +225,10 @@ export function PoolPanel({
   editable: boolean
   /** 육성 시트 열기 — 라인업 등록 여부 무관 (배치는 야구장) */
   onGrowth?: (batter: Batter) => void
+  /** 풀에서 바로 라인업 포지션 배치/이동 (타자) */
+  onAssign?: (batter: Batter, pos: LineupPosition) => void
+  /** 풀에서 바로 라인업 포지션 배치/이동 (유망주) */
+  onAssignProspect?: (row: RosterProspectRow, pos: LineupPosition) => void
   /** batter_id → 적용(최종) 스탯 — 라인업 선수는 풀에서도 최종 스탯 + 증감으로 표시 */
   applied?: Map<string, SlotStats>
   /** batter_id → 육성 설정 (Lv·각성·베테랑·장비 표시) */
@@ -145,7 +259,20 @@ export function PoolPanel({
   const cols = isBatterTab ? [CMP_COL, ...BATTER_COLS] : PITCHER_COLS
   const toggleCmp = (rowId: string) =>
     setCmp((prev) => (prev.includes(rowId) ? prev.filter((x) => x !== rowId) : [...prev.slice(-1), rowId]))
-  const cmpRows = cmp.map((rid) => pool.find((r) => r.id === rid)).filter((r): r is PoolPlayer => !!r?.batter)
+  /** 비교 대상 → 정규화 엔트리 (유망주·일반 카드 모두, 최종 스탯 기준) */
+  const cmpEntries = useMemo(
+    () =>
+      cmp
+        .map((rid) => {
+          const pr = prospects.find((it) => it.row.id === rid)
+          if (pr) return prospectToCmp(pr)
+          const pp = pool.find((r) => r.id === rid && r.batter)
+          if (pp) return batterToCmp(pp, applied, growthInfo)
+          return null
+        })
+        .filter((x): x is CmpEntry => !!x),
+    [cmp, prospects, pool, applied, growthInfo],
+  )
   const counts = useMemo(
     () => ({ 타자: pool.filter((r) => r.batter).length, 투수: pool.filter((r) => r.pitcher).length }),
     [pool],
@@ -168,7 +295,7 @@ export function PoolPanel({
   }, [pool, isBatterTab, sort])
 
   const clickSort = (c: Col) => {
-    if (c.key === '_cmp' || c.key === '_growth') return
+    if (NO_SORT.has(c.key)) return
     setSort((prev) =>
       prev?.key === c.key
         ? { key: c.key, dir: prev.dir === 1 ? -1 : 1 }
@@ -200,7 +327,7 @@ export function PoolPanel({
             return (
               <span key={k} className="flex items-baseline gap-1">
                 <span className="text-[.66rem] text-ink-faint">{STAT5_LABEL[k]}</span>
-                <b className="font-mono tabular-nums text-[.98rem]" style={{ color: tier.color }} title={tier.label}>
+                <b className={cn('font-mono tabular-nums text-[.98rem]', tier.cls)} style={{ color: tier.color }} title={tier.label}>
                   {v.toFixed(1)}
                 </b>
               </span>
@@ -287,6 +414,8 @@ export function PoolPanel({
                   onEdit={onProspectEdit}
                   onGrowth={onProspectGrowth}
                   onDelete={onProspectDelete}
+                  onAssign={onAssignProspect ? (pos) => onAssignProspect(it.row, pos) : undefined}
+                  compare={{ checked: cmp.includes(it.row.id), onToggle: () => toggleCmp(it.row.id) }}
                 />
               ))}
             {rows.map((r) => {
@@ -310,6 +439,13 @@ export function PoolPanel({
                     <tr className="bg-surface-2/70">
                       <td colSpan={cols.length}>
                         <div className="flex flex-wrap items-center gap-1 py-1">
+                          {r.batter && editable && onAssign && (
+                            <PositionChips
+                              fitOf={(pos) => positionFit(r.batter!, pos)}
+                              current={r.batter_id ? lineupPos.get(r.batter_id) ?? null : null}
+                              onPick={(pos) => onAssign(r.batter!, pos)}
+                            />
+                          )}
                           <span className="ml-auto flex gap-1">
                             {r.batter && editable && onGrowth && (
                               <Button
@@ -347,15 +483,7 @@ export function PoolPanel({
         <div className="mt-1.5 text-[.7rem] text-ink-soft">⚖ 비교할 선수를 한 명 더 체크하면 비교 팝업이 열립니다</div>
       )}
 
-      {cmpRows.length === 2 && (
-        <CompareModal
-          a={cmpRows[0]}
-          b={cmpRows[1]}
-          applied={applied ?? new Map()}
-          growthInfo={growthInfo ?? new Map()}
-          onClose={() => setCmp([])}
-        />
-      )}
+      {cmpEntries.length === 2 && <CompareModal a={cmpEntries[0]} b={cmpEntries[1]} onClose={() => setCmp([])} />}
     </Panel>
   )
 }
@@ -401,19 +529,19 @@ function FragmentRow({
         </span>
       )
     }
-    if (c.key === '_growth') {
-      if (!growth) return <span className="text-ink-faint">—</span>
-      const parts = growthSummary(growth)
-      if (parts.length === 0) return <span className="text-ink-faint">기본</span>
+    if (c.key === '_lv') {
+      const lv = growth && growth.level > 0 ? String(growth.level) : '—'
+      const full = growth ? growthSummary(growth).join('·') || '기본' : undefined
       return (
-        <span
-          className="text-[.66rem] font-bold text-[color:var(--gold)] whitespace-nowrap"
-          title={growth.coach_training !== '해당없음' ? `감독훈련: ${growth.coach_training}` : undefined}
-        >
-          {parts.join('·')}
+        <span className="font-mono tabular-nums text-ink-soft" title={full}>
+          {lv}
         </span>
       )
     }
+    if (c.key === '_vetsw')
+      return <VetSwCell kind="card" veteran={!!growth?.veteran} title={growth?.team_veteran ? '팀 베테랑 지정됨' : undefined} />
+
+
     if (applied && APPLIED_KEYS.has(c.key)) {
       const k = c.key as Stat5
       const fin = applied.final[k]
@@ -444,7 +572,7 @@ function FragmentRow({
           }
         >
           <span className="font-mono tabular-nums whitespace-nowrap">
-            <b style={{ color: tier.color }}>{fin}</b>
+            <b className={tier.cls} style={{ color: tier.color }}>{fin}</b>
             {d !== 0 && (
               <span className={cn('ml-0.5 text-[.62rem]', d > 0 ? 'text-[color:var(--green)]' : 'text-[color:var(--clay)]')}>
                 {d > 0 ? `+${d}` : d}
@@ -455,13 +583,15 @@ function FragmentRow({
       )
     }
     if (c.key === 'grade') {
-      return <GradeText g={String(p.grade)} />
+      return <GradeMark grade={String(p.grade)} />
     }
     if (c.key === 'name')
       return (
-        <span className="font-semibold">
-          {String(p.name)}
-          {inLineup && <span className="ml-1 text-[.62rem] font-bold text-[color:var(--green)]">⚾라인업</span>}
+        <span className="flex items-center gap-1">
+          <span className="inline-block max-w-[7rem] truncate font-semibold" title={String(p.name)}>
+            {String(p.name)}
+          </span>
+          {inLineup && <span className="shrink-0 text-[.62rem] font-bold text-[color:var(--green)]">⚾라인업</span>}
         </span>
       )
     if (c.key === 'position') {
@@ -492,9 +622,9 @@ function FragmentRow({
   )
 }
 
-/** 유망주 육성 요약 칩 텍스트 (풀 「육성」 컬럼) */
-function prospectSummary(p: Prospect): string {
-  if (!prospectHasGrowth(p)) return '기본'
+/** 유망주 육성 요약 칩 (풀 Lv 셀 title · 비교창) — 부분 배열, 없으면 [] */
+function prospectSummary(p: Prospect): string[] {
+  if (!prospectHasGrowth(p)) return []
   const parts: string[] = []
   const done = p.steps.filter((s) => s !== '-').length
   const perfect = p.steps.filter((s) => s === '완벽').length
@@ -505,7 +635,7 @@ function prospectSummary(p: Prospect): string {
   if (p.strength !== '-') parts.push(`강(${p.strength})`)
   if (p.weakness !== '-') parts.push(`약(${p.weakness})`)
   if (p.equip) parts.push(`${p.equip.kind}${p.equip.grade}`)
-  return parts.join('·') || '기본'
+  return parts
 }
 
 /** 유망주 행 — 데이터 행 + (선택 시) 설정/육성/삭제 액션 행 (배치는 야구장에서) */
@@ -518,6 +648,8 @@ function ProspectRowView({
   onEdit,
   onGrowth,
   onDelete,
+  onAssign,
+  compare,
 }: {
   it: ProspectItem
   cols: Col[]
@@ -527,26 +659,48 @@ function ProspectRowView({
   onEdit?: (row: RosterProspectRow) => void
   onGrowth?: (row: RosterProspectRow) => void
   onDelete?: (row: RosterProspectRow) => void
+  /** 풀에서 바로 라인업 포지션 배치/이동 */
+  onAssign?: (pos: LineupPosition) => void
+  /** 비교 체크 (유망주도 최종 스탯으로 비교) */
+  compare?: { checked: boolean; onToggle: () => void }
 }) {
   const { row, parsed: p, stats, pos } = it
   const cell = (c: Col) => {
-    if (c.key === '_cmp') return null
-    if (c.key === 'grade')
+    if (c.key === '_cmp') {
+      if (!compare) return null
       return (
-        <span className="rounded px-1 py-[1px] text-[.64rem] font-bold text-[color:var(--surface)]" style={{ background: 'var(--green)' }}>
-          유망
+        <span onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            className="cursor-pointer accent-[var(--accent)]"
+            checked={compare.checked}
+            onChange={compare.onToggle}
+            title="선수 비교에 추가 (2명)"
+          />
         </span>
       )
+    }
+    if (c.key === 'grade') return <GradeMark grade={null} />
+
     if (c.key === 'name')
       return (
-        <span className="font-semibold">
-          {p.name}
-          {pos && <span className="ml-1 text-[.62rem] font-bold text-[color:var(--green)]">⚾{pos}</span>}
+        <span className="flex items-center gap-1">
+          <span className="inline-block max-w-[7rem] truncate font-semibold" title={p.name}>
+            {p.name}
+          </span>
+          {pos && <span className="shrink-0 text-[.62rem] font-bold text-[color:var(--green)]">⚾{pos}</span>}
         </span>
       )
     if (c.key === 'position') return p.position
-    if (c.key === '_growth')
-      return <span className="text-[.66rem] font-bold text-[color:var(--green)] whitespace-nowrap">{prospectSummary(p)}</span>
+    if (c.key === '_lv') {
+      const perfect = p.steps.filter((s) => s === '완벽').length
+      return (
+        <span className="font-mono tabular-nums text-ink-soft" title={prospectSummary(p).join('·') || '기본'}>
+          {perfect}/7
+        </span>
+      )
+    }
+    if (c.key === '_vetsw') return <VetSwCell kind="prospect" strength={p.strength} weakness={p.weakness} />
     if (APPLIED_KEYS.has(c.key)) {
       const k = c.key as Stat5
       const fin = stats.final[k]
@@ -577,7 +731,7 @@ function ProspectRowView({
           }
         >
           <span className="font-mono tabular-nums whitespace-nowrap">
-            <b style={{ color: tier.color }}>{fin}</b>
+            <b className={tier.cls} style={{ color: tier.color }}>{fin}</b>
             {d !== 0 && (
               <span className={cn('ml-0.5 text-[.62rem]', d > 0 ? 'text-[color:var(--green)]' : 'text-[color:var(--clay)]')}>
                 {d > 0 ? `+${d}` : d}
@@ -608,9 +762,15 @@ function ProspectRowView({
         <tr className="bg-surface-2/70">
           <td colSpan={cols.length}>
             <div className="flex flex-wrap items-center gap-1 py-1">
-              <span className="text-[.7rem] text-ink-faint">
-                {pos ? `⚾ ${pos} 배치됨 — 야구장에서 관리` : '배치는 야구장에서 · 여기선 설정·육성'}
-              </span>
+              {editable && onAssign ? (
+                <PositionChips
+                  fitOf={(pp) => positionFit({ position: p.position, dual_position: null }, pp)}
+                  current={pos}
+                  onPick={onAssign}
+                />
+              ) : (
+                <span className="text-[.7rem] text-ink-faint">{pos ? `⚾ ${pos} 배치됨` : '미배치'}</span>
+              )}
               <span className="ml-auto flex gap-1">
                 {editable && onEdit && (
                   <Button variant="outline" className="!px-2 !py-[3px] !text-[.7rem] font-bold" onClick={() => onEdit(row)}>

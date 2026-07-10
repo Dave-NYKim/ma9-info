@@ -54,7 +54,24 @@ export interface SlotView {
   year: number | null
   team: string | null
   hands: string | null // 카드 = 우투/좌타 · 유망주 = 유형(파워/스피드)
+  levelup: string | null // 레벨업 유형1/유형2 (예: 파워/쓰로잉)
 }
+/** 레벨업 유형 2글자 약어 — 파워/컨택/스핏/쓰로/수비 (타순·라인업 표시 공통) */
+const LEVELUP_ABBR: Record<string, string> = {
+  파워: '파워',
+  컨택트: '컨택',
+  컨택: '컨택',
+  스피드: '스핏',
+  스핏: '스핏',
+  쓰로잉: '쓰로',
+  스로잉: '쓰로',
+  쓰로: '쓰로',
+  수비력: '수비',
+  수비: '수비',
+}
+const abbrevType = (t: string | null | undefined) => (t ? LEVELUP_ABBR[t] ?? t.slice(0, 2) : '—')
+const levelupLabel = (t1: string | null | undefined, t2: string | null | undefined) => `${abbrevType(t1)}/${abbrevType(t2)}`
+
 export function slotView(s: Pick<RosterSlot, 'batter' | 'prospect'>): SlotView {
   if (s.batter) {
     const b = s.batter
@@ -67,6 +84,7 @@ export function slotView(s: Pick<RosterSlot, 'batter' | 'prospect'>): SlotView {
       year: b.year,
       team: b.team_code,
       hands: `${b.throw_hand}/${b.bat_hand}`,
+      levelup: levelupLabel(b.levelup_type1, b.levelup_type2),
     }
   }
   const p = parseProspect((s.prospect as RosterProspectRow | null)?.data)
@@ -79,6 +97,7 @@ export function slotView(s: Pick<RosterSlot, 'batter' | 'prospect'>): SlotView {
     year: null,
     team: null,
     hands: `${p.throw_hand}/${p.bat_hand}`,
+    levelup: levelupLabel(p.type1, p.type2),
   }
 }
 

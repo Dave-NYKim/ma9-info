@@ -122,6 +122,10 @@ export async function applySlots(entries: SlotChange[]): Promise<void> {
       id: s.id,
       roster_id: s.roster_id,
       batter_id: s.batter_id,
+      // 유망주 슬롯(batter_id=null)은 prospect_id 를 반드시 함께 보내야 한다.
+      // 빠지면 upsert 의 INSERT 시도 튜플에서 prospect_id 가 null 로 채워져
+      // check(num_nonnulls(batter_id, prospect_id)=1) 위반 → 타순 변경 오류.
+      prospect_id: s.prospect_id,
       assigned_position: position ?? s.assigned_position,
       use_dual: use_dual ?? s.use_dual,
       lineup_order: order ?? s.lineup_order,

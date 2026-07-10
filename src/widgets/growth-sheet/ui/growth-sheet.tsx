@@ -18,6 +18,7 @@ import {
 } from '@shared/config/team-stats'
 import { COST_DISCOUNT_POSITIONS } from '@shared/config/team-stats'
 import { gradeBarBg, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
+import { useBatterPotentialMap } from '@entities/potential'
 import { Badge, Button, Labeled, Panel, Select, Toggle } from '@shared/ui'
 import { cn } from '@shared/lib/cn'
 
@@ -42,6 +43,7 @@ export function GrowthSheet({
 }) {
   const [g, setG] = useState<Growth>(growth)
   const [legend, setLegend] = useState(teamSettings.legend_potential)
+  const { data: potMap } = useBatterPotentialMap()
   // 포지션 선택(그냥 듀포, 기본 주) — 고정과 별개. 고정은 아래 체크박스로 이 선택 포지션을 훈련.
   const [selPos, setSelPos] = useState<string>(growth.fixed_position ?? lineup?.position ?? b.position)
 
@@ -210,6 +212,67 @@ export function GrowthSheet({
                 />
               )}
             </div>
+
+            {/* 잠재력 — 주잠재 3개 중 택1 + 베테랑 시 부잠재 활성 (표시·기록만, 수치는 아래 '잠재력·기타'에) */}
+            {(() => {
+              const toSub = selPos === b.dual_position
+              const mains = (toSub
+                ? [b.dual_potential1, b.dual_potential2, b.dual_potential3]
+                : [b.potential1, b.potential2, b.potential3]
+              ).filter((x): x is string => !!x)
+              const sub = toSub ? b.dual_sub_potential : b.sub_potential
+              if (mains.length === 0 && !sub) return null
+              const sel = g.selected_potential
+              const selInfo = sel ? potMap?.[sel] : undefined
+              const subInfo = sub ? potMap?.[sub] : undefined
+              const pick = (name: string) => set({ selected_potential: sel === name ? null : name })
+              return (
+                <Labeled label="잠재력 (주잠재 3개 중 1개 선택 · 수치는 아래 '잠재력·기타'에 입력)">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex gap-1 flex-wrap">
+                      {mains.map((name) => {
+                        const on = sel === name
+                        return (
+                          <button
+                            key={name}
+                            type="button"
+                            onClick={() => pick(name)}
+                            className={cn(
+                              'px-2.5 py-[6px] rounded-lg border text-[.8rem] font-bold transition cursor-pointer',
+                              on
+                                ? 'bg-[color:var(--green)] text-white border-[color:var(--green)]'
+                                : 'bg-surface-2 text-ink-soft border-line-strong hover:border-ink',
+                            )}
+                          >
+                            {name}
+                          </button>
+                        )
+                      })}
+                      {mains.length === 0 && <span className="text-[.76rem] text-ink-faint py-[6px]">주잠재 없음</span>}
+                    </div>
+                    {selInfo?.effect && (
+                      <div className="text-[.72rem] text-ink-soft whitespace-pre-line">
+                        <b className="text-ink-faint mr-1">효과</b>
+                        {selInfo.effect}
+                        {selInfo.enhanced_effect && (
+                          <>
+                            {'\n'}
+                            <b className="text-ink-faint mr-1">강화</b>
+                            {selInfo.enhanced_effect}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {sub && (
+                      <div className={cn('text-[.72rem]', g.veteran ? 'text-[color:var(--purple)]' : 'text-ink-faint')}>
+                        <b>부잠재</b> {sub} · {g.veteran ? '베테랑 활성' : '베테랑 지정 시 활성'}
+                        {g.veteran && subInfo?.effect && <span className="text-ink-soft"> — {subInfo.effect}</span>}
+                      </div>
+                    )}
+                  </div>
+                </Labeled>
+              )
+            })()}
 
             {/* L 전용 — HOF (팀 설정에 저장) */}
             {isLegend && (

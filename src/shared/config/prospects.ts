@@ -29,16 +29,19 @@ export const prospectSchema = z
     bat_hand: z.enum(PROSPECT_BAT_HANDS).catch('우타'),
     throw_hand: z.enum(PROSPECT_THROW_HANDS).catch('우투'),
     weather: z.string().nullable().catch(null), // 주 날씨 (유망주는 부날씨 없음)
+    potential: z.string().catch(''), // 잠재력 (설정에서 직접 입력) — 표시용
     // 육성 (별도 「육성」에서) — 일반 선수의 roster_growth 대응
     steps: z.array(z.enum(GROW_STEP)).length(7).catch(['-', '-', '-', '-', '-', '-', '-']),
     rising: z.boolean().catch(false), // 라이징스타 적용 (전 스탯 +2)
     roy_awaken: z.boolean().catch(false), // 풀각성 ROY (유형 일치 +4 / 불일치 +6)
     strength: z.enum(GROW_STEP).catch('-'), // 강점 훈련 (유형 일치 +1/+2)
     weakness: z.enum(GROW_STEP).catch('-'), // 약점 훈련 (유형 외 +1/+3)
+    coach_training: z.string().catch('해당없음'), // 감독훈련 (일반 선수와 동일 목록)
     equip: z.object({ kind: z.enum(EQUIP_KINDS), grade: z.enum(EQUIP_GRADES) }).nullable().catch(null),
     coop: stats5, // 협동훈련
     extra: stats5, // 잠재력 등 기타
     body: stats5, // 특화훈련(유망주 체형)
+    body_name: z.string().catch(''), // 체형 훈련 이름 (예: 휘젓기) — 라인업 표 표시용
   })
   .catch({
     name: '유망주',
@@ -48,15 +51,18 @@ export const prospectSchema = z
     bat_hand: '우타',
     throw_hand: '우투',
     weather: null,
+    potential: '',
     steps: ['-', '-', '-', '-', '-', '-', '-'],
     rising: false,
     roy_awaken: false,
     strength: '-',
     weakness: '-',
+    coach_training: '해당없음',
     equip: null,
     coop: zeroStats(),
     extra: zeroStats(),
     body: zeroStats(),
+    body_name: '',
   })
 export type Prospect = z.infer<typeof prospectSchema>
 export const parseProspect = (j: unknown): Prospect => prospectSchema.parse(j ?? {})

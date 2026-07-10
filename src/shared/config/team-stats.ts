@@ -18,9 +18,9 @@ export const STAT5_LABEL: Record<Stat5, string> = {
   defense: '수비',
 }
 
-/** 최종(적용) 스탯 구간 색 — 사용자 확정. 기본 스탯엔 쓰지 않는다. */
-export const STAT_TIERS: { min: number; label: string; color: string }[] = [
-  { min: 120, label: '극한', color: 'var(--green)' },
+/** 최종(적용) 스탯 구간 색 — 사용자 확정. 기본 스탯엔 쓰지 않는다. cls = 특수 연출(극한 샤이닝). */
+export const STAT_TIERS: { min: number; label: string; color: string; cls?: string }[] = [
+  { min: 120, label: '극한', color: 'var(--g-sg)', cls: 'stat-extreme' },
   { min: 110, label: '초월', color: 'var(--sun)' },
   { min: 100, label: '극상', color: 'var(--purple)' },
   { min: 91, label: '최상', color: 'var(--g-r)' },
@@ -199,6 +199,8 @@ export const growthSchema = z
     team_veteran: z.boolean().catch(false), // 팀 베테랑 지정(B/SG 카드, 등급별 1명 — UI 강제)
     /** 포지션 고정(훈련) = 활성화한 단일 포지션. null=미고정(주포지션). 듀얼 카드·R/S 제외에만 유효. */
     fixed_position: z.string().nullable().catch(null),
+    /** 선택한 주잠재 이름(3개 중 1개). 표시·기록용 — 수치는 extra 에 수동 입력. 베테랑 ON 시 부잠재 활성(표시). */
+    selected_potential: z.string().nullable().catch(null),
     coach_training: z.string().catch('해당없음'),
     equip: z.object({ kind: z.enum(EQUIP_KINDS), grade: z.enum(EQUIP_GRADES) }).nullable().catch(null),
     special: z
@@ -207,6 +209,7 @@ export const growthSchema = z
     coop: stats5Schema, // 협동훈련(위시)
     extra: stats5Schema, // 잠재력 등 기타
     body: stats5Schema, // 체형
+    body_name: z.string().catch(''), // 체형 훈련 이름 (예: 휘젓기) — 라인업 표 표시용, 수치는 body 에
   })
   .catch({
     level: 0,
@@ -214,12 +217,14 @@ export const growthSchema = z
     veteran: false,
     team_veteran: false,
     fixed_position: null,
+    selected_potential: null,
     coach_training: '해당없음',
     equip: null,
     special: { strength: '-', weakness: '-' },
     coop: zeroStats(),
     extra: zeroStats(),
     body: zeroStats(),
+    body_name: '',
   })
 
 /** 포지션 훈련 자격 = 듀얼 포지션 보유 + R/S 등급 아님 */

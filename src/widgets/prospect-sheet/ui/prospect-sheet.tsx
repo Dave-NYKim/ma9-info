@@ -58,14 +58,24 @@ export function ProspectSheet({
           }
         >
           <div className="flex flex-col gap-3">
-            {/* 이름 */}
-            <Labeled label="이름">
-              <input
-                className="w-full rounded-lg border border-line-strong bg-surface-2 text-ink px-[9px] py-[7px] text-[.85rem] outline-none focus:border-[color:var(--accent)]"
-                value={p.name}
-                onChange={(e) => set({ name: e.target.value })}
-              />
-            </Labeled>
+            {/* 이름 · 잠재력 */}
+            <div className="grid grid-cols-2 gap-2">
+              <Labeled label="이름">
+                <input
+                  className="w-full rounded-lg border border-line-strong bg-surface-2 text-ink px-[9px] py-[7px] text-[.85rem] outline-none focus:border-[color:var(--accent)]"
+                  value={p.name}
+                  onChange={(e) => set({ name: e.target.value })}
+                />
+              </Labeled>
+              <Labeled label="잠재력 (직접 입력 · 라인업 표 표시용)">
+                <input
+                  className="w-full rounded-lg border border-line-strong bg-surface-2 text-ink px-[9px] py-[7px] text-[.85rem] outline-none focus:border-[color:var(--accent)]"
+                  value={p.potential}
+                  placeholder="예: 정교한타격"
+                  onChange={(e) => set({ potential: e.target.value })}
+                />
+              </Labeled>
+            </div>
 
             {/* 유망주 포지션 (기본스탯 결정) */}
             <Labeled label="유망주 포지션 (기본스탯 결정 · DH 없음)">

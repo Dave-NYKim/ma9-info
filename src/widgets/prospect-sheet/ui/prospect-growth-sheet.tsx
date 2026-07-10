@@ -6,6 +6,7 @@ import {
   EQUIP_STAT,
   STAT5,
   STAT5_LABEL,
+  TRAININGS,
   type Stat5,
   type Stats5,
 } from '@shared/config/team-stats'
@@ -111,6 +112,15 @@ export function ProspectGrowthSheet({
                 </Select>
               </Labeled>
             </div>
+
+            {/* 감독훈련 (일반 선수와 동일) */}
+            <Labeled label="감독훈련">
+              <Select value={p.coach_training} onChange={(e) => set({ coach_training: e.target.value })}>
+                {TRAININGS.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </Select>
+            </Labeled>
 
             {/* 장비 */}
             <div className="grid grid-cols-2 gap-2">

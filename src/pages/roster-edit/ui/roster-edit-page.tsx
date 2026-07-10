@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { Batter } from '@entities/batter'
+import { usePool } from '@entities/pool'
 import { useSession } from '@entities/session'
 import {
   ConflictError,
@@ -29,6 +30,7 @@ import { PositionPicker } from '@widgets/position-picker'
 import { ProspectSheet, ProspectGrowthSheet } from '@widgets/prospect-sheet'
 import { TeamPreview } from '@widgets/team-preview'
 import { TeamSettingsPanel } from '@widgets/team-settings'
+import { LineupSheet } from '@widgets/lineup-sheet'
 import { TeamStatBar } from '@widgets/team-stat-bar'
 import { LINEUP_SIZE, type LineupPosition } from '@shared/config/roster'
 import { DEFAULT_PROSPECT, parseProspect, type Prospect } from '@shared/config/prospects'
@@ -56,6 +58,7 @@ export function RosterEditPage() {
   const nav = useNavigate()
   const { userId } = useSession()
   const { data: roster, isLoading } = useRoster(id)
+  const { data: pool = [] } = usePool()
 
   const slots = useMemo(
     () => [...(roster?.roster_players ?? [])].sort((a, b) => a.lineup_order - b.lineup_order),
@@ -144,12 +147,27 @@ export function RosterEditPage() {
       }),
     [roster?.roster_prospects, slots, ts, ctx],
   )
-  /** batter_id → 적용(최종) 스탯 — 풀 패널·비교 팝업에서 사용 */
+  /** batter_id → 적용(최종) 스탯 — 풀 패널·비교 팝업에서 사용.
+   *  라인업 밖 풀 선수도 팀설정·육성을 전부 반영(주 포지션 기준)해 평가용 최종 스탯을 낸다
+   *  — 풀에서 버프 반영된 스탯을 보고 좋은 선수를 라인업에 올리기 위함. */
   const appliedStats = useMemo(() => {
     const m = new Map<string, SlotStats>()
+    // 라인업 슬롯 — 실제 배치 포지션 기준(오프/듀얼 반영)
     for (const { slot: s, stats } of slotStatsList) if (s.batter_id) m.set(s.batter_id, stats)
+    // 풀에만 있는(라인업 밖) 카드 — 주 포지션 기준, 팀설정·육성 전부 반영
+    for (const r of pool) {
+      if (!r.batter || !r.batter_id || m.has(r.batter_id)) continue
+      m.set(
+        r.batter_id,
+        computeSlotStats(
+          { batter: r.batter, assigned_position: r.batter.position, growth: growthMap.get(r.batter_id) ?? DEFAULT_GROWTH },
+          ts,
+          ctx,
+        ),
+      )
+    }
     return m
-  }, [slotStatsList])
+  }, [slotStatsList, pool, growthMap, ts, ctx])
   /** batter_id → 배치 포지션 (라인업 배치됨 표시·피커 이동 판단) */
   const lineupPos = useMemo(
     () => new Map(slots.filter((s) => s.batter_id).map((s) => [s.batter_id!, s.assigned_position as string])),
@@ -523,9 +541,6 @@ export function RosterEditPage() {
               mismatch={fixMismatch}
               onMove={moveOrder}
               onRemove={removeSlot}
-              onEditProspect={
-                isOwner ? (s) => s.prospect && setProspectSheet({ mode: 'edit', row: s.prospect }) : undefined
-              }
             />
             <TeamPreview ts={ts} ctx={ctx} cost={cost} veteranNames={veteranNames} className="flex-1 min-h-0" />
             {!isOwner && (
@@ -545,6 +560,8 @@ export function RosterEditPage() {
           lineupPos={lineupPos}
           editable
           onGrowth={(batter) => setGrowthTarget(batter)}
+          onAssign={assign}
+          onAssignProspect={assignProspect}
           applied={appliedStats}
           growthInfo={growthMap}
           teamAvg={teamAvg}
@@ -555,6 +572,9 @@ export function RosterEditPage() {
           onAddProspect={() => setProspectSheet({ mode: 'create' })}
         />
       )}
+
+      {/* 팀 페이지 맨 아래 — 전체 라인업 최종 스탯 (인게임 팀 정보 화면 형태) */}
+      <LineupSheet entries={slotStatsList} growthMap={growthMap} />
 
       {/* 야구장 포지션 클릭 → 선수/유망주 선택 팝업 (검색 포함) */}
       {pickerPos && (

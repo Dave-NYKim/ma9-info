@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { RosterSlot } from '@entities/roster'
 import { positionFit, slotView } from '@entities/roster'
 import { FIELD_POS, LINEUP_POSITIONS, type LineupPosition } from '@shared/config/roster'
@@ -152,6 +153,7 @@ function FilledChip({
   const { x, y } = FIELD_POS[slot.assigned_position]
   const v = slotView(slot)
   const gradeColor = v.grade ? `var(${gradeCssVar(v.grade)})` : 'var(--green)' // 유망주 = 초록
+  const sheen = v.grade === 'SG' || v.grade === 'B' // 배경+테두리에 걸쳐 광택 반짝
   const fit = positionFit({ position: v.mainPos, dual_position: v.dualPos }, slot.assigned_position)
   return (
     <div
@@ -162,6 +164,7 @@ function FilledChip({
       className={cn(
         'absolute -translate-x-1/2 -translate-y-1/2 z-10 group rounded-lg border-2 px-1.5 py-1 min-w-[62px] max-w-[92px] shadow-[var(--shadow)] transition',
         editable && 'cursor-pointer hover:-translate-y-[calc(50%+2px)]',
+        sheen && 'chip-sheen',
         selected && 'outline outline-2 outline-offset-2 outline-[color:var(--accent)]',
       )}
       style={{
@@ -169,7 +172,8 @@ function FilledChip({
         top: `${y}%`,
         borderColor: gradeColor,
         background: `color-mix(in srgb, ${gradeColor} 14%, var(--surface))`,
-      }}
+        ...(sheen ? { ['--shine']: v.grade === 'SG' ? 'rgba(255,255,255,.75)' : 'rgba(255,214,90,.8)' } : {}),
+      } as CSSProperties}
       title={
         mismatch
           ? '포지션 고정과 다른 자리에 배치됨'
@@ -178,20 +182,22 @@ function FilledChip({
             : undefined
       }
     >
-      <div className="flex items-center gap-1 leading-none">
-        <span className="w-[15px] h-[15px] shrink-0 rounded-full bg-ink text-[color:var(--surface)] text-[.58rem] font-extrabold flex items-center justify-center tabular-nums">
-          {slot.lineup_order}
-        </span>
-        <span className="text-[.56rem] font-bold text-ink-faint tracking-tight">
-          {slot.assigned_position}
-          {slot.use_dual && <span className="text-[color:var(--gold)]">·D</span>}
-        </span>
-        {mismatch && (
-          <span className="ml-auto rounded bg-[color:var(--clay)] px-[3px] text-[.56rem] font-extrabold text-white leading-none">!</span>
-        )}
-        {!mismatch && fit === 'off' && <span className="text-[.6rem] text-[color:var(--clay)] font-extrabold">!</span>}
+      <div className="relative z-[1]">
+        <div className="flex items-center gap-1 leading-none">
+          <span className="w-[15px] h-[15px] shrink-0 rounded-full bg-ink text-[color:var(--surface)] text-[.58rem] font-extrabold flex items-center justify-center tabular-nums">
+            {slot.lineup_order}
+          </span>
+          <span className="text-[.56rem] font-bold text-ink-faint tracking-tight">
+            {slot.assigned_position}
+            {slot.use_dual && <span className="text-[color:var(--gold)]">·D</span>}
+          </span>
+          {mismatch && (
+            <span className="ml-auto rounded bg-[color:var(--clay)] px-[3px] text-[.56rem] font-extrabold text-white leading-none">!</span>
+          )}
+          {!mismatch && fit === 'off' && <span className="text-[.6rem] text-[color:var(--clay)] font-extrabold">!</span>}
+        </div>
+        <div className="mt-0.5 text-[.7rem] font-extrabold truncate text-ink">{v.name}</div>
       </div>
-      <div className="mt-0.5 text-[.7rem] font-extrabold truncate text-ink">{v.name}</div>
       {editable && (
         <button
           type="button"

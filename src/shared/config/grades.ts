@@ -37,5 +37,16 @@ export const gradeCardBg = (code: string) => {
         color-mix(in srgb,#0b0b0d 18%,var(--surface)) 100%)`
   return `color-mix(in srgb, var(${gradeCssVar(code)}) 8%, var(--surface))`
 }
+
+/** 라인업 표·타순 행 배경 — 시그니처는 홀로그램의 흰색 피크(#b3ecff·#e6f9ff)를 빼고
+ *  균일한 시안 틴트로. 작은 글자 가독성 확보용 (배터 카드는 원본 gradeCardBg 유지). */
+export const gradeCardBgSoft = (code: string) =>
+  code === 'SG'
+    ? `linear-gradient(135deg,
+        color-mix(in srgb,#3ec3f0 18%,var(--surface)) 0%,
+        color-mix(in srgb,#57c7f2 20%,var(--surface)) 50%,
+        color-mix(in srgb,#3ec3f0 18%,var(--surface)) 100%)`
+    : gradeCardBg(code)
+
 /** 밝은 액센트(하늘색/황금)엔 어두운 글자. */
 export const GRADE_ACCENT_TEXT: Record<string, string> = { SG: '#06263a', L: '#3a2c02' }

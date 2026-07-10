@@ -35,7 +35,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         })
     }
     supabase.auth.getSession().then(({ data }) => load(data.session))
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => load(session))
+    // onAuthStateChange 콜백은 auth 내부 락을 쥔 채 호출된다. 여기서 supabase 쿼리를
+    // 곧바로 await 하면 그 쿼리가 다시 락을 요청 → 데드락 → loading 이 안 풀려 무한 로딩.
+    // 프로필 조회를 콜백 밖(setTimeout 0)으로 미뤄 락을 먼저 반환한다. (Supabase 권장 패턴)
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setTimeout(() => load(session), 0)
+    })
     return () => {
       alive = false
       sub.subscription.unsubscribe()

@@ -1,20 +1,19 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { RosterSlot } from '@entities/roster'
 import { positionFit, slotView } from '@entities/roster'
+import { gradeBarBg, gradeCardBgSoft } from '@shared/config/grades'
 import { LINEUP_SIZE } from '@shared/config/roster'
-import { gradeBarBg, GRADE_ACCENT_TEXT } from '@shared/config/grades'
-import { Badge, Panel } from '@shared/ui'
+import { GradeMark, Panel } from '@shared/ui'
 import { cn } from '@shared/lib/cn'
 
-/** 타순 1~9 — 정보만(등급·연도·이름·팀·투타·포지션). 순서 변경 = 드래그앤드랍. 유망주는 「유망」 뱃지 + 설정 버튼.
- *  육성·스탯·유망주 추가는 여기 없음(전부 풀 패널). */
+/** 타순 1~9 — 정보만(등급·연도·이름·팀·투타·포지션). 순서 변경 = 드래그앤드랍.
+ *  순수 타순 관리만: 드래그 순서 변경 + 라인업 제거. 육성·스탯·유망주 설정은 전부 풀 패널. */
 export function BattingOrder({
   slots,
   editable,
   mismatch,
   onMove,
   onRemove,
-  onEditProspect,
 }: {
   slots: RosterSlot[]
   editable: boolean
@@ -23,8 +22,6 @@ export function BattingOrder({
   /** dragged 를 targetOrder 자리로 (targetSlot = 그 자리에 있던 선수, 빈 자리면 null) */
   onMove: (dragged: RosterSlot, targetOrder: number, targetSlot: RosterSlot | null) => void
   onRemove: (s: RosterSlot) => void
-  /** 유망주 슬롯 설정 열기 */
-  onEditProspect?: (s: RosterSlot) => void
 }) {
   const byOrder = new Map(slots.map((s) => [s.lineup_order, s]))
   const [dragId, setDragId] = useState<string | null>(null)
@@ -87,6 +84,18 @@ export function BattingOrder({
           }
           const v = slotView(s)
           const fit = positionFit({ position: v.mainPos, dual_position: v.dualPos }, s.assigned_position)
+          const grade = v.grade // 카드 등급코드 · 유망주는 null
+          const isShiny = grade === 'SG' || grade === 'B'
+          // 배경 광택 스윕: 시그=흰색(아주 옅게) · 블랙=금색 — 세기 비슷하게 · 배경 전체 반짝
+          const shineColor = grade === 'SG' ? 'rgba(255,255,255,.22)' : grade === 'B' ? 'rgba(255,214,90,.5)' : undefined
+          const rowBg = grade ? gradeCardBgSoft(grade) : 'color-mix(in srgb, var(--green) 8%, var(--surface))'
+          const accent = grade ? gradeBarBg(grade) : 'var(--green)'
+          const rowStyle = {
+            background: rowBg,
+            borderColor: grade === 'SG' ? 'rgba(95,208,250,.55)' : grade === 'B' ? 'rgba(201,165,74,.6)' : 'var(--line)',
+            boxShadow: grade === 'SG' ? '0 0 10px rgba(62,195,240,.18)' : grade === 'B' ? '0 0 10px rgba(201,165,74,.16)' : undefined,
+            ...(shineColor ? { ['--shine']: shineColor } : {}),
+          } as CSSProperties
           return (
             <div
               key={order}
@@ -100,75 +109,61 @@ export function BattingOrder({
                 setOverOrder(null)
               }}
               {...dropProps}
+              style={rowStyle}
               className={cn(
-                'group flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-[6px] transition',
+                'group relative overflow-hidden flex items-center gap-2 rounded-lg border px-2.5 py-[6px] transition',
+                isShiny && 'grade-shine',
                 editable && 'cursor-grab active:cursor-grabbing',
                 dragId === s.id && 'opacity-40',
-                isOver && 'border-[color:var(--accent)] outline outline-1 outline-[color:var(--accent)]',
+                isOver && 'outline outline-1 outline-[color:var(--accent)]',
               )}
             >
-              {editable && <span className="text-ink-faint text-[.7rem] leading-none select-none">⠿</span>}
-              <span className="w-5 text-right font-mono font-extrabold tabular-nums text-[.85rem] text-ink-faint">{order}</span>
-              {v.grade ? (
-                <Badge color={gradeBarBg(v.grade)} text={GRADE_ACCENT_TEXT[v.grade] ?? '#fff'}>
-                  {v.grade}
-                </Badge>
-              ) : (
-                <Badge color="var(--green)">유망</Badge>
-              )}
-              {v.year != null && (
-                <span className="shrink-0 rounded border border-line-strong bg-surface px-1 py-[1px] text-[.66rem] font-bold tabular-nums text-ink-soft">
-                  {v.year}
+              {/* 좌측 등급 accent 바 */}
+              <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: accent }} />
+              {/* 콘텐츠 — 광택 스윕(z-auto) 위로 또렷하게 */}
+              <span className="relative z-[1] flex flex-1 min-w-0 items-center gap-2 pl-1">
+                {editable && <span className="shrink-0 text-ink-faint text-[.7rem] leading-none select-none">⠿</span>}
+                <span className="w-5 shrink-0 text-right font-mono font-extrabold tabular-nums text-[.85rem] text-ink-faint">{order}</span>
+                <GradeMark grade={v.grade ?? null} className="shrink-0" />
+                <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                  <span className="truncate font-bold text-[.86rem]">{v.name}</span>
+                  {v.team && <span className="shrink-0 text-[.7rem] text-ink-soft">{v.team}</span>}
                 </span>
-              )}
-              <span className="min-w-0 truncate font-bold text-[.86rem]">{v.name}</span>
-              {v.team && <span className="shrink-0 text-[.72rem] text-ink-soft">{v.team}</span>}
-              {v.hands && <span className="shrink-0 text-[.72rem] text-ink-faint tabular-nums">{v.hands}</span>}
-              {mismatch?.has(s.id) && (
+                <span className="w-9 shrink-0 text-right font-mono tabular-nums text-[.72rem] text-ink-soft">{v.year ?? ''}</span>
+                <span className="w-[46px] shrink-0 text-center text-[.7rem] font-semibold text-ink-soft">{v.levelup ?? ''}</span>
+                <span className="w-[52px] shrink-0 text-right text-[.72rem] text-ink-faint tabular-nums">{v.hands ?? ''}</span>
+                <span className="w-3 shrink-0 text-center">
+                  {mismatch?.has(s.id) && (
+                    <span className="text-[.72rem] font-extrabold text-[color:var(--clay)]" title="포지션 고정과 다른 자리에 배치됨">
+                      !
+                    </span>
+                  )}
+                </span>
                 <span
-                  className="shrink-0 rounded bg-[color:var(--clay)] px-1 text-[.66rem] font-extrabold text-white"
-                  title="포지션 고정과 다른 자리에 배치됨"
+                  className={cn(
+                    'w-11 shrink-0 rounded border py-[1px] text-center text-[.68rem] font-bold',
+                    fit === 'main' && 'border-line-strong text-ink-soft bg-surface-2',
+                    fit === 'dual' && 'border-[color:var(--gold)] text-[color:var(--gold)]',
+                    fit === 'off' && 'border-[color:var(--clay)] text-[color:var(--clay)]',
+                  )}
+                  title={fit === 'off' ? '카드 포지션과 다른 자리 (수비 페널티)' : fit === 'dual' ? '듀얼 포지션으로 기용' : undefined}
                 >
-                  !
+                  {s.assigned_position}
                 </span>
-              )}
-              <span
-                className={cn(
-                  'ml-auto shrink-0 rounded border px-1.5 py-[1px] text-[.68rem] font-bold',
-                  fit === 'main' && 'border-line-strong text-ink-soft bg-surface-2',
-                  fit === 'dual' && 'border-[color:var(--gold)] text-[color:var(--gold)]',
-                  fit === 'off' && 'border-[color:var(--clay)] text-[color:var(--clay)]',
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onRemove(s)
+                    }}
+                    className="shrink-0 w-5 h-5 rounded-full text-[.65rem] text-ink-faint hover:bg-ink hover:text-[color:var(--surface)] cursor-pointer opacity-0 group-hover:opacity-100 transition"
+                    title="라인업에서 제거"
+                  >
+                    ✕
+                  </button>
                 )}
-                title={fit === 'off' ? '카드 포지션과 다른 자리 (수비 페널티)' : fit === 'dual' ? '듀얼 포지션으로 기용' : undefined}
-              >
-                {s.assigned_position}
               </span>
-              {editable && v.isProspect && onEditProspect && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onEditProspect(s)
-                  }}
-                  className="shrink-0 rounded border border-[color:var(--green)] px-1.5 py-[2px] text-[.66rem] font-bold text-[color:var(--green)] cursor-pointer"
-                  title="유망주 설정 (성장·라이징·특화)"
-                >
-                  설정
-                </button>
-              )}
-              {editable && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onRemove(s)
-                  }}
-                  className="shrink-0 w-5 h-5 rounded-full text-[.65rem] text-ink-faint hover:bg-ink hover:text-[color:var(--surface)] cursor-pointer opacity-0 group-hover:opacity-100 transition"
-                  title="라인업에서 제거"
-                >
-                  ✕
-                </button>
-              )}
             </div>
           )
         })}

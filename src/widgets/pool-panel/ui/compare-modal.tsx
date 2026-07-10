@@ -1,37 +1,41 @@
-import type { Batter } from '@entities/batter'
-import type { PoolPlayer } from '@entities/pool'
-import { STAT5, STAT5_LABEL, statTier, type Growth, type Stat5 } from '@shared/config/team-stats'
-import type { SlotStats } from '@shared/lib/stat-engine'
-import { gradeBarBg, gradeCardBg, gradeName, GRADE_ACCENT_TEXT } from '@shared/config/grades'
+import { STAT5, STAT5_LABEL, statTier, type Stat5 } from '@shared/config/team-stats'
+import { gradeBarBg, gradeCardBg, GRADE_ACCENT_TEXT } from '@shared/config/grades'
 import { Badge, Button } from '@shared/ui'
 import { cn } from '@shared/lib/cn'
-import { growthSummary } from './pool-panel'
 
-/** 선수 2명 비교 팝업 — 최종 스탯만, 두 선수 간 차이만 표시. 우세 쪽 크게·구간색, 열세 흐림. 잠재력 포함. */
-export function CompareModal({
-  a,
-  b,
-  applied,
-  growthInfo,
-  onClose,
-}: {
-  a: PoolPlayer
-  b: PoolPlayer
-  /** batter_id → 라인업 적용 스탯 (없으면 카드 기본 스탯이 곧 최종) */
-  applied: Map<string, SlotStats>
-  /** batter_id → 육성 설정 (베테랑·장비·체형 등 표시) */
-  growthInfo: Map<string, Growth>
-  onClose: () => void
-}) {
-  const ba = a.batter!
-  const bb = b.batter!
-  const sa = a.batter_id ? applied.get(a.batter_id) : undefined
-  const sb = b.batter_id ? applied.get(b.batter_id) : undefined
-  const ga = a.batter_id ? growthInfo.get(a.batter_id) : undefined
-  const gb = b.batter_id ? growthInfo.get(b.batter_id) : undefined
-  const val = (bt: Batter, s: SlotStats | undefined, k: Stat5) => s?.final[k] ?? bt[k] ?? 0
-  const sumA = STAT5.reduce((acc, k) => acc + val(ba, sa, k), 0)
-  const sumB = STAT5.reduce((acc, k) => acc + val(bb, sb, k), 0)
+/** 잠재력 묶음 (일반 카드만 — 유망주는 없음) */
+export interface CmpPotentials {
+  main: string[]
+  sub: string | null
+  dual: string[]
+  dualSub: string | null
+}
+
+/** 비교창 입력 — 일반 카드/유망주 공통 정규화 엔트리. 최종 스탯 기준 비교. */
+export interface CmpEntry {
+  name: string
+  /** 색상용 등급 코드 — 유망주는 null(초록 처리) */
+  gradeCode: string | null
+  gradeLabel: string
+  /** 서브 라인 (팀·연도·포지션·투타 등) */
+  sub: string
+  /** 라인업 반영됨 뱃지 */
+  applied: boolean
+  final: Record<Stat5, number>
+  /** 클러치 — 유망주는 null(스탯 없음) */
+  clutch: number | null
+  /** 잠재력 — 유망주는 null */
+  potentials: CmpPotentials | null
+  /** 육성 요약 칩 */
+  growthChips: string[]
+  growthTitle?: string
+}
+
+/** 선수 2명 비교 팝업 — 최종 스탯만, 두 선수 간 차이만 표시. 우세 쪽 크게·구간색, 열세 흐림. 유망주도 지원. */
+export function CompareModal({ a, b, onClose }: { a: CmpEntry; b: CmpEntry; onClose: () => void }) {
+  const sumA = STAT5.reduce((acc, k) => acc + a.final[k], 0)
+  const sumB = STAT5.reduce((acc, k) => acc + b.final[k], 0)
+  const showClutch = a.clutch != null && b.clutch != null
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={onClose}>
@@ -41,17 +45,17 @@ export function CompareModal({
       >
         {/* 헤더 — 양쪽 등급색 */}
         <div className="grid grid-cols-[1fr_auto_1fr]">
-          <PlayerHead b={ba} applied={!!sa} align="left" />
+          <PlayerHead e={a} align="left" />
           <div className="flex items-center px-3 text-[1.1rem] font-extrabold text-ink-faint">VS</div>
-          <PlayerHead b={bb} applied={!!sb} align="right" />
+          <PlayerHead e={b} align="right" />
         </div>
 
         {/* 최종 스탯 비교 */}
         <div className="px-5 py-3 flex flex-col">
           {STAT5.map((k) => (
-            <CompareRow key={k} label={STAT5_LABEL[k]} a={val(ba, sa, k)} b={val(bb, sb, k)} tiered />
+            <CompareRow key={k} label={STAT5_LABEL[k]} a={a.final[k]} b={b.final[k]} tiered />
           ))}
-          <CompareRow label="클러치" a={ba.clutch ?? 0} b={bb.clutch ?? 0} />
+          {showClutch && <CompareRow label="클러치" a={a.clutch as number} b={b.clutch as number} />}
           <div className="mt-1 border-t border-line-strong pt-2">
             <CompareRow label="5스탯 합" a={sumA} b={sumB} big />
           </div>
@@ -59,16 +63,16 @@ export function CompareModal({
 
         {/* 잠재력 */}
         <div className="grid grid-cols-[1fr_auto_1fr] gap-3 border-t border-line px-5 py-3">
-          <PotentialCol b={ba} align="left" />
+          <PotentialCol p={a.potentials} align="left" />
           <div className="flex items-center text-[.64rem] font-bold uppercase tracking-[.08em] text-ink-faint">잠재력</div>
-          <PotentialCol b={bb} align="right" />
+          <PotentialCol p={b.potentials} align="right" />
         </div>
 
         {/* 육성 설정 (레벨·베테랑·장비·체형 등) */}
         <div className="grid grid-cols-[1fr_auto_1fr] gap-3 border-t border-line px-5 py-3">
-          <GrowthCol g={ga} align="left" />
+          <GrowthCol chips={a.growthChips} title={a.growthTitle} align="left" />
           <div className="flex items-center text-[.64rem] font-bold uppercase tracking-[.08em] text-ink-faint">육성</div>
-          <GrowthCol g={gb} align="right" />
+          <GrowthCol chips={b.growthChips} title={b.growthTitle} align="right" />
         </div>
 
         <div className="flex justify-end px-5 pb-4">
@@ -81,23 +85,22 @@ export function CompareModal({
   )
 }
 
-function PlayerHead({ b, applied, align }: { b: Batter; applied: boolean; align: 'left' | 'right' }) {
+function PlayerHead({ e, align }: { e: CmpEntry; align: 'left' | 'right' }) {
   const right = align === 'right'
+  const cardBg = e.gradeCode ? gradeCardBg(e.gradeCode) : 'color-mix(in srgb, var(--green) 12%, var(--surface))'
+  const barBg = e.gradeCode ? gradeBarBg(e.gradeCode) : 'var(--green)'
+  const badgeText = e.gradeCode ? (GRADE_ACCENT_TEXT[e.gradeCode] ?? '#fff') : '#fff'
   return (
-    <div className={cn('p-4', right && 'text-right')} style={{ background: gradeCardBg(b.grade) }}>
-      <div className="h-1 -mt-4 -mx-4 mb-3" style={{ background: gradeBarBg(b.grade) }} />
+    <div className={cn('p-4', right && 'text-right')} style={{ background: cardBg }}>
+      <div className="h-1 -mt-4 -mx-4 mb-3" style={{ background: barBg }} />
       <div className={cn('flex items-center gap-1.5', right && 'justify-end')}>
-        <Badge color={gradeBarBg(b.grade)} text={GRADE_ACCENT_TEXT[b.grade] ?? '#fff'}>
-          {b.grade} · {gradeName(b.grade)}
+        <Badge color={barBg} text={badgeText}>
+          {e.gradeLabel}
         </Badge>
-        {applied && <Badge color="var(--green)">라인업</Badge>}
+        {e.applied && <Badge color="var(--green)">라인업</Badge>}
       </div>
-      <div className="mt-1 text-[1.25rem] font-extrabold leading-tight truncate">{b.name}</div>
-      <div className="text-[.74rem] text-ink-soft">
-        {b.team_code}
-        {b.year != null && ` · ${b.year}`} · {b.dual_position ? `${b.position}/${b.dual_position}` : b.position} · {b.throw_hand}/
-        {b.bat_hand}
-      </div>
+      <div className="mt-1 text-[1.25rem] font-extrabold leading-tight truncate">{e.name}</div>
+      <div className="text-[.74rem] text-ink-soft">{e.sub}</div>
     </div>
   )
 }
@@ -130,7 +133,7 @@ function SideVal({
   tiered?: boolean
   big?: boolean
 }) {
-  const color = tiered ? statTier(v).color : undefined
+  const tier = tiered ? statTier(v) : undefined
   return (
     <div className={cn('flex items-baseline gap-1.5', right ? 'justify-end' : 'flex-row-reverse justify-end')}>
       {win && diff !== 0 && (
@@ -141,8 +144,9 @@ function SideVal({
           'font-mono tabular-nums font-extrabold transition',
           big ? 'text-[1.5rem]' : 'text-[1.3rem]',
           lose && 'opacity-40 font-bold text-[1.05rem]',
+          !lose && tier?.cls,
         )}
-        style={{ color: lose ? undefined : color }}
+        style={{ color: lose ? undefined : tier?.color }}
       >
         {v}
       </span>
@@ -150,15 +154,14 @@ function SideVal({
   )
 }
 
-/** 육성 설정 요약 — Lv·각성·베테랑·장비·훈련·체형/협동/잠재 합 */
-function GrowthCol({ g, align }: { g: Growth | undefined; align: 'left' | 'right' }) {
+/** 육성 설정 요약 칩 */
+function GrowthCol({ chips, title, align }: { chips: string[]; title?: string; align: 'left' | 'right' }) {
   const right = align === 'right'
-  const parts = g ? growthSummary(g) : []
-  if (parts.length === 0)
+  if (chips.length === 0)
     return <div className={cn('text-[.72rem] text-ink-faint', right && 'text-right')}>육성 설정 없음</div>
   return (
-    <div className={cn('flex flex-wrap gap-1', right && 'justify-end')} title={g && g.coach_training !== '해당없음' ? `감독훈련: ${g.coach_training}` : undefined}>
-      {parts.map((p) => (
+    <div className={cn('flex flex-wrap gap-1', right && 'justify-end')} title={title}>
+      {chips.map((p) => (
         <span
           key={p}
           className="rounded border px-1.5 py-[1px] text-[.7rem] font-bold whitespace-nowrap text-[color:var(--gold)]"
@@ -174,11 +177,9 @@ function GrowthCol({ g, align }: { g: Growth | undefined; align: 'left' | 'right
   )
 }
 
-/** 잠재력 칩 — 주1~3(초록) + 베테랑(보라), 듀얼 세트는 금색 라벨로 아래 줄 */
-function PotentialCol({ b, align }: { b: Batter; align: 'left' | 'right' }) {
+/** 잠재력 칩 — 주1~3(초록) + 베테랑(보라), 듀얼 세트는 금색 라벨로 아래 줄. 유망주(null)는 없음 안내. */
+function PotentialCol({ p, align }: { p: CmpPotentials | null; align: 'left' | 'right' }) {
   const right = align === 'right'
-  const main = [b.potential1, b.potential2, b.potential3].filter((x): x is string => !!x)
-  const dual = [b.dual_potential1, b.dual_potential2, b.dual_potential3].filter((x): x is string => !!x)
   const Chip = ({ name, tone }: { name: string; tone: 'green' | 'purple' | 'gold' }) => (
     <span
       className="rounded border px-1.5 py-[1px] text-[.7rem] font-semibold whitespace-nowrap"
@@ -191,25 +192,26 @@ function PotentialCol({ b, align }: { b: Batter; align: 'left' | 'right' }) {
       {name}
     </span>
   )
-  const none = main.length === 0 && !b.sub_potential && dual.length === 0 && !b.dual_sub_potential
+  if (!p) return <div className={cn('text-[.72rem] text-ink-faint', right && 'text-right')}>유망주 · 잠재력 없음</div>
+  const none = p.main.length === 0 && !p.sub && p.dual.length === 0 && !p.dualSub
   return (
     <div className={cn('flex flex-col gap-1.5 min-w-0', right && 'items-end')}>
       {none && <span className="text-[.72rem] text-ink-faint">잠재력 없음</span>}
-      {(main.length > 0 || b.sub_potential) && (
+      {(p.main.length > 0 || p.sub) && (
         <div className={cn('flex flex-wrap gap-1', right && 'justify-end')}>
-          {main.map((p) => (
-            <Chip key={p} name={p} tone="green" />
+          {p.main.map((x) => (
+            <Chip key={x} name={x} tone="green" />
           ))}
-          {b.sub_potential && <Chip name={`베테랑 ${b.sub_potential}`} tone="purple" />}
+          {p.sub && <Chip name={`베테랑 ${p.sub}`} tone="purple" />}
         </div>
       )}
-      {(dual.length > 0 || b.dual_sub_potential) && (
+      {(p.dual.length > 0 || p.dualSub) && (
         <div className={cn('flex flex-wrap items-center gap-1', right && 'justify-end')}>
           <span className="text-[.62rem] font-bold text-[color:var(--gold)]">듀얼</span>
-          {dual.map((p) => (
-            <Chip key={p} name={p} tone="gold" />
+          {p.dual.map((x) => (
+            <Chip key={x} name={x} tone="gold" />
           ))}
-          {b.dual_sub_potential && <Chip name={`베테랑 ${b.dual_sub_potential}`} tone="purple" />}
+          {p.dualSub && <Chip name={`베테랑 ${p.dualSub}`} tone="purple" />}
         </div>
       )}
     </div>
