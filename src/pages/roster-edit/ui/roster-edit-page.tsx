@@ -28,7 +28,6 @@ import { PoolPanel, type ProspectItem } from '@widgets/pool-panel'
 import { GrowthSheet } from '@widgets/growth-sheet'
 import { PositionPicker } from '@widgets/position-picker'
 import { ProspectSheet, ProspectGrowthSheet } from '@widgets/prospect-sheet'
-import { TeamPreview } from '@widgets/team-preview'
 import { TeamSettingsPanel } from '@widgets/team-settings'
 import { LineupSheet } from '@widgets/lineup-sheet'
 import { TeamStatBar } from '@widgets/team-stat-bar'
@@ -80,6 +79,7 @@ export function RosterEditPage() {
 
   /** 타순 교환 대기 슬롯(필드 칩·타순 행 공유) */
   const [swapSel, setSwapSel] = useState<string | null>(null)
+  const [orderOpen, setOrderOpen] = useState(false) // 타순 간략 보기 팝업
   const [nameEdit, setNameEdit] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   /** 육성 시트 대상 — 라인업 등록 여부 무관 (풀에서 열림) */
@@ -257,8 +257,9 @@ export function RosterEditPage() {
     )
   }
 
-  /** 타순 패널 드래그앤드랍 — 빈 자리면 그 번호로 이동, 찬 자리면 사이로 끼워넣기(점유 번호 유지) */
+  /** 타순 드래그앤드랍 — 두 선수 자리를 서로 교환(밀어내기 아님). 빈 자리면 그 번호로 이동. */
   const moveOrder = (dragged: RosterSlot, targetOrder: number, targetSlot: RosterSlot | null) => {
+    if (dragged.lineup_order === targetOrder) return
     if (!targetSlot) {
       applyMut.mutate([{ slot: dragged, order: targetOrder }], {
         onSuccess: () => toast(`${targetOrder}번으로 이동`),
@@ -266,17 +267,14 @@ export function RosterEditPage() {
       })
       return
     }
-    const filled = slots // lineup_order 오름차순 정렬돼 있음
-    const fromIdx = filled.findIndex((x) => x.id === dragged.id)
-    const toIdx = filled.findIndex((x) => x.id === targetSlot.id)
-    if (fromIdx < 0 || toIdx < 0) return
-    const arr = [...filled]
-    arr.splice(fromIdx, 1)
-    arr.splice(toIdx, 0, dragged)
-    const orders = filled.map((x) => x.lineup_order)
-    const entries = arr.map((slot, i) => ({ slot, order: orders[i] })).filter((e) => e.order !== e.slot.lineup_order)
-    if (entries.length === 0) return
-    applyMut.mutate(entries, { onSuccess: () => toast('타순 변경'), onError: fail })
+    // 찬 자리 = 서로 교환
+    applyMut.mutate(
+      [
+        { slot: dragged, order: targetSlot.lineup_order },
+        { slot: targetSlot, order: dragged.lineup_order },
+      ],
+      { onSuccess: () => toast(`타순 교환: ${dragged.lineup_order}번 ↔ ${targetSlot.lineup_order}번`), onError: fail },
+    )
   }
 
   const removeSlot = (s: RosterSlot) => {
@@ -519,42 +517,36 @@ export function RosterEditPage() {
         </div>
       )}
 
-      {/* 좌 야구장 / 우 타순+팀 미리보기 (우측 합산 높이 = 야구장 높이) */}
-      <div className="grid gap-3 items-stretch lg:grid-cols-[minmax(0,1fr)_520px]">
-        <div className="flex flex-col gap-3 min-w-0">
-          <Ballpark
-            slots={slots}
-            editable={isOwner}
-            swapSel={swapSel}
-            mismatch={fixMismatch}
-            onChipClick={slotClick}
-            onRemove={removeSlot}
-            onEmptyClick={(pos) => setPickerPos(pos)}
-          />
-        </div>
-        {/* 우측 열 — lg 에선 야구장 높이에 고정(absolute), 미리보기가 남는 공간을 차지하고 내부 스크롤 */}
-        <div className="relative min-w-0">
-          <div className="flex flex-col gap-3 lg:absolute lg:inset-0">
-            <BattingOrder
-              slots={slots}
-              editable={isOwner}
-              mismatch={fixMismatch}
-              onMove={moveOrder}
-              onRemove={removeSlot}
-            />
-            <TeamPreview ts={ts} ctx={ctx} cost={cost} veteranNames={veteranNames} className="flex-1 min-h-0" />
-            {!isOwner && (
-              <Panel title="읽기 전용">
-                <p className="text-[.82rem] text-ink-soft m-0">
-                  다른 사용자의 팀입니다 — 라인업 열람만 가능해요. 내 팀을 만들려면 팀 목록에서 「+ 팀 만들기」.
-                </p>
-              </Panel>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* ── 1. 야구장 (전체 너비) ── */}
+      <Ballpark
+        slots={slots}
+        editable={isOwner}
+        swapSel={swapSel}
+        mismatch={fixMismatch}
+        onChipClick={slotClick}
+        onRemove={removeSlot}
+        onEmptyClick={(pos) => setPickerPos(pos)}
+      />
 
-      {/* 내 풀 — 하단 전체 너비 (비교 작업대) */}
+      {/* ── 2. 타순 — 전체 라인업 표 (「타순 간략 보기」 = 팝업) ── */}
+      <LineupSheet
+        entries={slotStatsList}
+        growthMap={growthMap}
+        editable={isOwner}
+        onMove={moveOrder}
+        teamAvg={teamAvg}
+        onShowOrder={() => setOrderOpen(true)}
+      />
+
+      {!isOwner && (
+        <Panel title="읽기 전용">
+          <p className="text-[.82rem] text-ink-soft m-0">
+            다른 사용자의 팀입니다 — 라인업 열람만 가능해요. 내 팀을 만들려면 팀 목록에서 「+ 팀 만들기」.
+          </p>
+        </Panel>
+      )}
+
+      {/* ── 3. 내 선수 풀 ── */}
       {isOwner && (
         <PoolPanel
           lineupPos={lineupPos}
@@ -564,7 +556,6 @@ export function RosterEditPage() {
           onAssignProspect={assignProspect}
           applied={appliedStats}
           growthInfo={growthMap}
-          teamAvg={teamAvg}
           prospects={prospectItems}
           onProspectEdit={(row) => setProspectSheet({ mode: 'edit', row })}
           onProspectGrowth={(row) => setProspectGrowthRow(row)}
@@ -573,8 +564,28 @@ export function RosterEditPage() {
         />
       )}
 
-      {/* 팀 페이지 맨 아래 — 전체 라인업 최종 스탯 (인게임 팀 정보 화면 형태) */}
-      <LineupSheet entries={slotStatsList} growthMap={growthMap} />
+      {/* 타순 간략 보기 — 팝업 */}
+      {orderOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/75 backdrop-blur-sm p-4"
+          onClick={() => setOrderOpen(false)}
+        >
+          <div className="w-full max-w-[560px] my-6" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex justify-end">
+              <Button variant="ghost" className="!px-3 !py-1" onClick={() => setOrderOpen(false)}>
+                닫기 ✕
+              </Button>
+            </div>
+            <BattingOrder
+              slots={slots}
+              editable={isOwner}
+              mismatch={fixMismatch}
+              onMove={moveOrder}
+              onRemove={removeSlot}
+            />
+          </div>
+        </div>
+      )}
 
       {/* 야구장 포지션 클릭 → 선수/유망주 선택 팝업 (검색 포함) */}
       {pickerPos && (

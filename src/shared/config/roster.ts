@@ -4,7 +4,8 @@ export type LineupPosition = (typeof LINEUP_POSITIONS)[number]
 
 export const LINEUP_SIZE = 9
 
-/** 야구장 오버레이 좌표 — widgets/ballpark 의 viewBox(0 0 100 100) 기준 = 컨테이너 %. */
+/** 야구장 오버레이 좌표 — widgets/ballpark viewBox(0 0 100 100) % 기준.
+ *  컨테이너는 aspect-[100/46] + preserveAspectRatio="none" 으로 y만 압축되므로 % 좌표는 그대로 유효. */
 export const FIELD_POS: Record<LineupPosition | 'P', { x: number; y: number }> = {
   C: { x: 50, y: 92 },
   '1B': { x: 70.5, y: 62 },

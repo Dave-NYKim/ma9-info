@@ -28,7 +28,7 @@ export function ProspectGrowthSheet({
   const perfect = p.steps.filter((s) => s === '완벽').length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/75 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-[640px] my-6" onClick={(e) => e.stopPropagation()}>
         <Panel
           title={

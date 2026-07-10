@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { slotView, type RosterSlot } from '@entities/roster'
 import { gradeBarBg, gradeCardBgSoft, gradeCssVar } from '@shared/config/grades'
 import { parseProspect } from '@shared/config/prospects'
@@ -48,10 +48,12 @@ const cardBorder = (g: string | null) => (g ? `var(${gradeCssVar(g)})` : 'var(--
 interface Col {
   order: number
   filled: boolean
+  slot: RosterSlot | null // 드래그 교환용 원본 슬롯
   grade: string | null // 카드 등급코드(SG·B·FR·E·L·R·S) · 유망주 null
   name: string
   pos: string
   hands: string
+  year: string // 연도 (카드만 · 유망주는 '')
   levelup: string // 레벨업 유형 (예: 파워/쓰로잉)
   final: Stats5 | null
   potential: string // 잠재력 행 = 선택된 주잠재(유망주는 설정의 잠재력)
@@ -123,7 +125,22 @@ function EquipCell({ equip }: { equip: { kind: string; grade: string } | null })
 }
 
 /** 선수 한 컬럼(카드) */
-function PlayerColumn({ c }: { c: Col }) {
+function PlayerColumn({
+  c,
+  drag,
+}: {
+  c: Col
+  drag?: {
+    canDrag: boolean
+    dragging: boolean
+    isOver: boolean
+    onStart: () => void
+    onEnd: () => void
+    onOver: () => void
+    onLeave: () => void
+    onDrop: () => void
+  }
+}) {
   const isSpecial = c.grade === 'SG' || c.grade === 'B' // 이름 날개 + 글로우 + 배경 전체 광택
   // 배경 광택 스윕: 시그=흰색(아주 옅게, 안튀게) · 블랙=금색 — 세기를 서로 비슷하게 맞춤
   const shineColor = c.grade === 'SG' ? 'rgba(255,255,255,.22)' : c.grade === 'B' ? 'rgba(255,214,90,.5)' : undefined
@@ -135,21 +152,56 @@ function PlayerColumn({ c }: { c: Col }) {
         ...(shineColor ? { ['--shine']: shineColor } : {}),
       }
     : { background: 'var(--surface)', border: '1px solid var(--line)' }
+  const canDrag = !!drag?.canDrag
+  const draggable = canDrag && c.filled
 
   return (
     // SG·B = 카드 배경 전체가 반짝(grade-shine) · 콘텐츠는 z-1 로 그 위 → 글자 선명
     <div
-      className={`relative flex-1 min-w-[82px] rounded-md overflow-hidden${isSpecial ? ' grade-shine' : ''}`}
+      onDragOver={
+        canDrag
+          ? (e) => {
+              e.preventDefault()
+              drag?.onOver()
+            }
+          : undefined
+      }
+      onDragLeave={canDrag ? drag?.onLeave : undefined}
+      onDrop={
+        canDrag
+          ? (e) => {
+              e.preventDefault()
+              drag?.onDrop()
+            }
+          : undefined
+      }
+      className={`relative flex-1 min-w-[82px] rounded-md overflow-hidden${isSpecial ? ' grade-shine' : ''}${
+        drag?.dragging ? ' opacity-40' : ''
+      }${drag?.isOver ? ' outline outline-2 outline-[color:var(--accent)]' : ''}`}
       style={cardStyle}
     >
       {/* 상단 등급 바 (absolute — 행 정렬에 영향 없음) */}
       {c.filled && <div className="absolute top-0 left-0 right-0 h-[3px] z-[3]" style={{ background: gradeBar(c.grade) }} />}
       <div className="relative z-[1]">
-        {/* 헤더 N번 타자 (노란색) */}
+        {/* 헤더 N번 타자 (노란색) — 여기서만 드래그(그립) */}
         <div
+          draggable={draggable}
+          onDragStart={
+            draggable
+              ? (e) => {
+                  e.dataTransfer.effectAllowed = 'move'
+                  drag?.onStart()
+                }
+              : undefined
+          }
+          onDragEnd={draggable ? drag?.onEnd : undefined}
+          title={draggable ? '드래그해서 타순 교환' : undefined}
           style={{ height: H.head, color: 'var(--gold)', borderBottom: '1px solid color-mix(in srgb, var(--ink) 14%, transparent)' }}
-          className="flex items-center justify-center text-[.7rem] font-extrabold"
+          className={`flex items-center justify-center gap-1 text-[.7rem] font-extrabold${
+            draggable ? ' cursor-grab active:cursor-grabbing' : ''
+          }`}
         >
+          {draggable && <span style={{ opacity: 0.65 }}>⠿</span>}
           {c.order}번 타자
         </div>
         {/* 선수 정보 박스 — 포지션 · 이름(시그/블랙 = 날개) · 좌투우타 · 레벨업 */}
@@ -171,7 +223,7 @@ function PlayerColumn({ c }: { c: Col }) {
                   {isSpecial && <NameWing variant={c.grade as 'SG' | 'B'} flip className="shrink-0" />}
                 </span>
                 <span style={{ color: 'var(--ink-soft)' }} className="mt-1 text-[.6rem] font-semibold leading-none">
-                  {c.hands}
+                  {c.year ? `${c.year} · ${c.hands}` : c.hands}
                 </span>
                 <span style={{ color: 'var(--ink-soft)' }} className="mt-0.5 text-[.6rem] font-semibold leading-none max-w-full truncate px-1">
                   {c.levelup}
@@ -224,10 +276,23 @@ function PlayerColumn({ c }: { c: Col }) {
 export function LineupSheet({
   entries,
   growthMap,
+  editable = false,
+  onMove,
+  teamAvg,
+  onShowOrder,
 }: {
   entries: { slot: RosterSlot; stats: SlotStats }[]
   growthMap: Map<string, Growth>
+  editable?: boolean
+  /** 드래그 교환 — 두 슬롯 자리 맞바꿈 (타순 패널과 동일 핸들러) */
+  onMove?: (dragged: RosterSlot, targetOrder: number, targetSlot: RosterSlot | null) => void
+  /** 라인업 등록 선수 최종 스탯 평균 (하단 표시) */
+  teamAvg?: { count: number; stats: Record<Stat5, number>; clutch: number }
+  /** 「타순 간략 보기」 버튼 → 타순 팝업 열기 */
+  onShowOrder?: () => void
 }) {
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overOrder, setOverOrder] = useState<number | null>(null)
   const byOrder = new Map(entries.map((e) => [e.slot.lineup_order, e]))
   const cols: Col[] = Array.from({ length: LINEUP_SIZE }, (_, i) => i + 1).map((order) => {
     const e = byOrder.get(order)
@@ -235,10 +300,12 @@ export function LineupSheet({
       return {
         order,
         filled: false,
+        slot: null,
         grade: null,
         name: '',
         pos: '',
         hands: '',
+        year: '',
         levelup: '',
         final: null,
         potential: '-',
@@ -262,10 +329,12 @@ export function LineupSheet({
     return {
       order,
       filled: true,
+      slot: s,
       grade: view.grade,
       name: view.name,
       pos: s.assigned_position,
       hands: view.hands ?? '',
+      year: view.year ? String(view.year) : '',
       levelup: view.levelup ?? '',
       final: e.stats.final,
       potential: (isProspect ? prospect?.potential : growth?.selected_potential) || '-',
@@ -277,16 +346,107 @@ export function LineupSheet({
     }
   })
 
+  const canDrag = editable && !!onMove
+  const drop = (target: Col) => {
+    const dragged = cols.find((c) => c.slot?.id === dragId)?.slot ?? null
+    setDragId(null)
+    setOverOrder(null)
+    if (!dragged || !onMove || dragged.lineup_order === target.order) return
+    onMove(dragged, target.order, target.slot)
+  }
+
   return (
     <div className="rounded-xl p-3 sm:p-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+      {(onShowOrder || canDrag) && (
+        <div className="mb-2 flex items-center gap-2 flex-wrap">
+          {onShowOrder && (
+            <button
+              type="button"
+              onClick={onShowOrder}
+              className="rounded-lg border px-2.5 py-1 text-[.75rem] font-bold cursor-pointer transition hover:brightness-105"
+              style={{ borderColor: 'var(--line-strong)', color: 'var(--ink-soft)', background: 'var(--surface)' }}
+            >
+              타순 간략 보기
+            </button>
+          )}
+          {canDrag && (
+            <span className="text-[.72rem]" style={{ color: 'var(--ink-faint)' }}>
+              헤더(⠿)를 드래그해 타순 교환
+            </span>
+          )}
+        </div>
+      )}
       <div className="overflow-x-auto">
         <div className="flex gap-1.5 min-w-[860px] items-start">
           <LabelColumn />
           {cols.map((c) => (
-            <PlayerColumn key={c.order} c={c} />
+            <PlayerColumn
+              key={c.order}
+              c={c}
+              drag={
+                canDrag
+                  ? {
+                      canDrag: true,
+                      dragging: !!c.slot && dragId === c.slot.id,
+                      isOver: overOrder === c.order && dragId != null && c.slot?.id !== dragId,
+                      onStart: () => c.slot && setDragId(c.slot.id),
+                      onEnd: () => {
+                        setDragId(null)
+                        setOverOrder(null)
+                      },
+                      onOver: () => setOverOrder(c.order),
+                      onLeave: () => setOverOrder((v) => (v === c.order ? null : v)),
+                      onDrop: () => drop(c),
+                    }
+                  : undefined
+              }
+            />
           ))}
         </div>
       </div>
+      {/* 팀 평균 — 라인업 등록 선수 최종 스탯 (표: 헤더=스탯명 / 아래 수치) */}
+      {teamAvg && teamAvg.count > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-[.64rem] font-bold uppercase tracking-[.08em]" style={{ color: 'var(--gold)' }}>
+            팀 평균
+          </div>
+          <div className="overflow-x-auto">
+            <table className="border-collapse text-center" style={{ minWidth: '320px' }}>
+              <thead>
+                <tr>
+                  {STAT5.map((k) => (
+                    <th
+                      key={k}
+                      className="text-[.66rem] font-bold py-[3px] px-3 whitespace-nowrap"
+                      style={{ color: 'var(--ink-soft)', background: 'var(--surface-3)', border: '1px solid var(--line)' }}
+                    >
+                      {FULL_LABEL[k]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {STAT5.map((k) => {
+                    const v = teamAvg.stats[k]
+                    const tier = statTier(v)
+                    return (
+                      <td
+                        key={k}
+                        className={`font-mono tabular-nums text-[.95rem] font-bold py-[3px] px-3${tier.cls ? ` ${tier.cls}` : ''}`}
+                        style={{ color: tier.color, background: 'var(--surface)', border: '1px solid var(--line)' }}
+                        title={tier.label}
+                      >
+                        {v.toFixed(1)}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

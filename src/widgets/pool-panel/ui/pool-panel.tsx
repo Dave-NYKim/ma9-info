@@ -6,7 +6,7 @@ import { usePool, usePlayerSearch, useAddToPool, useRemoveFromPool, type PoolPla
 import { GRADES, gradeCssVar, gradeName } from '@shared/config/grades'
 import { LINEUP_POSITIONS, type LineupPosition } from '@shared/config/roster'
 import { prospectHasGrowth, type Prospect } from '@shared/config/prospects'
-import { STAT5, STAT5_LABEL, statTier, type Growth, type Stat5 } from '@shared/config/team-stats'
+import { STAT5, statTier, type Growth, type Stat5 } from '@shared/config/team-stats'
 import type { SlotStats } from '@shared/lib/stat-engine'
 import { useDebounced } from '@shared/lib/use-debounced'
 import { cn } from '@shared/lib/cn'
@@ -213,7 +213,6 @@ export function PoolPanel({
   onAssignProspect,
   applied,
   growthInfo,
-  teamAvg,
   prospects = [],
   onProspectEdit,
   onProspectGrowth,
@@ -233,8 +232,6 @@ export function PoolPanel({
   applied?: Map<string, SlotStats>
   /** batter_id → 육성 설정 (Lv·각성·베테랑·장비 표시) */
   growthInfo?: Map<string, Growth>
-  /** 라인업 등록 선수들의 최종 스탯 평균 (풀 맨 위 표시) */
-  teamAvg?: { count: number; stats: Record<Stat5, number>; clutch: number }
   /** 팀 유망주(라인업 등록 여부 무관) — 타자 탭 상단에 고정 표시 */
   prospects?: ProspectItem[]
   onProspectEdit?: (row: RosterProspectRow) => void
@@ -315,31 +312,6 @@ export function PoolPanel({
       right={<span className="text-[.72rem] text-ink-faint tabular-nums">중복 담기 가능</span>}
       className="min-w-0"
     >
-      {/* 팀 평균 — 라인업 등록 선수 최종 스탯 기준 */}
-      {teamAvg && teamAvg.count > 0 && (
-        <div className="mb-2 flex items-center gap-x-4 gap-y-1 flex-wrap rounded-lg border border-line bg-surface-2 px-3 py-2">
-          <span className="text-[.64rem] font-bold uppercase tracking-[.08em] text-ink-faint">
-            팀 평균 · 라인업 {teamAvg.count}명 최종
-          </span>
-          {STAT5.map((k) => {
-            const v = teamAvg.stats[k]
-            const tier = statTier(v)
-            return (
-              <span key={k} className="flex items-baseline gap-1">
-                <span className="text-[.66rem] text-ink-faint">{STAT5_LABEL[k]}</span>
-                <b className={cn('font-mono tabular-nums text-[.98rem]', tier.cls)} style={{ color: tier.color }} title={tier.label}>
-                  {v.toFixed(1)}
-                </b>
-              </span>
-            )
-          })}
-          <span className="flex items-baseline gap-1">
-            <span className="text-[.66rem] text-ink-faint">클러치</span>
-            <b className="font-mono tabular-nums text-[.98rem] text-ink-soft">{teamAvg.clutch.toFixed(1)}</b>
-          </span>
-        </div>
-      )}
-
       {/* 담기 검색 */}
       <div className="relative mb-2">
         <Input placeholder="선수 이름 검색해서 풀에 담기…" value={q} onChange={(e) => setQ(e.target.value)} />

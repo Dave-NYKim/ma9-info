@@ -41,9 +41,13 @@ export function Ballpark({
 }) {
   const byPos = new Map(slots.map((s) => [s.assigned_position, s]))
   return (
-    <div className="relative w-full max-w-[720px] mx-auto aspect-square select-none">
-      {/* ── 야구장 (배경) ── */}
-      <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full rounded-2xl border border-line shadow-[var(--shadow)]">
+    <div className="relative w-full aspect-[100/46] select-none">
+      {/* ── 야구장 (오늘 첫 버전 색감 · 너비 꽉 채우고 높이만 압축) ── */}
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="absolute inset-0 w-full h-full rounded-2xl border border-line shadow-[var(--shadow)]"
+      >
         <rect x="0" y="0" width="100" height="100" fill={GRASS_FOUL} />
         <clipPath id="fairClip">
           <path d="M 50 88 L 2 40 A 82 82 0 0 1 98 40 Z" />
@@ -162,7 +166,7 @@ function FilledChip({
       onClick={editable ? onClick : undefined}
       onKeyDown={editable ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick() : undefined}
       className={cn(
-        'absolute -translate-x-1/2 -translate-y-1/2 z-10 group rounded-lg border-2 px-1.5 py-1 min-w-[62px] max-w-[92px] shadow-[var(--shadow)] transition',
+        'absolute -translate-x-1/2 -translate-y-1/2 z-10 group rounded-lg border-2 px-1.5 py-1 w-[clamp(76px,9vw,110px)] shadow-[var(--shadow)] transition',
         editable && 'cursor-pointer hover:-translate-y-[calc(50%+2px)]',
         sheen && 'chip-sheen',
         selected && 'outline outline-2 outline-offset-2 outline-[color:var(--accent)]',
@@ -196,7 +200,11 @@ function FilledChip({
           )}
           {!mismatch && fit === 'off' && <span className="text-[.6rem] text-[color:var(--clay)] font-extrabold">!</span>}
         </div>
-        <div className="mt-0.5 text-[.7rem] font-extrabold truncate text-ink">{v.name}</div>
+        <div className="mt-0.5 text-[.72rem] font-extrabold truncate text-ink">{v.name}</div>
+        <div className="text-[.56rem] font-semibold leading-tight truncate text-ink-soft">
+          {v.year ? `${v.year} · ${v.hands}` : v.hands}
+        </div>
+        <div className="text-[.56rem] font-semibold leading-tight truncate text-ink-faint">{v.levelup}</div>
       </div>
       {editable && (
         <button
