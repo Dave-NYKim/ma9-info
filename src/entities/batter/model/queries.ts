@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchYears } from '@shared/api/years'
 import {
   createBatter,
   getBatter,
@@ -20,6 +21,10 @@ export const useBatters = (f: BatterFilters) =>
 
 export const useBatter = (id: string | undefined) =>
   useQuery({ queryKey: batterKeys.one(id ?? ''), queryFn: () => getBatter(id as string), enabled: !!id })
+
+/** 필터용: 타자 데이터에 존재하는 연도 목록(내림차순) */
+export const useBatterYears = () =>
+  useQuery({ queryKey: ['batter_years'], staleTime: 5 * 60_000, queryFn: () => fetchYears('v_batters') })
 
 /** 이름 자동완성 검색 (신원 자동채움용) */
 export const useBatterNameSearch = (q: string) =>

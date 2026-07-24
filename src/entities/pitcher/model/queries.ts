@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchYears } from '@shared/api/years'
 import {
   createPitcher,
   getPitcher,
@@ -34,6 +35,10 @@ export const usePitcherNameSearch = (q: string) =>
 
 export const usePitcher = (id: string | undefined) =>
   useQuery({ queryKey: pitcherKeys.one(id ?? ''), queryFn: () => getPitcher(id as string), enabled: !!id })
+
+/** 필터용: 투수 데이터에 존재하는 연도 목록(내림차순) */
+export const usePitcherYears = () =>
+  useQuery({ queryKey: ['pitcher_years'], staleTime: 5 * 60_000, queryFn: () => fetchYears('v_pitchers') })
 
 export function useCreatePitcher() {
   const qc = useQueryClient()

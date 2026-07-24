@@ -1,12 +1,13 @@
-import type { TeamCost, TeamCtx } from '@shared/lib/stat-engine'
+import type { PitcherCost, TeamCost, TeamCtx } from '@shared/lib/stat-engine'
 import { TOTAL_COST, type TeamSettings } from '@shared/config/team-stats'
 import { gradeCssVar } from '@shared/config/grades'
 import { Button, HoverTip } from '@shared/ui'
 import { cn } from '@shared/lib/cn'
 
-/** 빌더 상단 팀 스탯 바 — 코스트 게이지 + 활성 버프 칩 + 팀 설정 토글 */
+/** 빌더 상단 팀 스탯 바 — 타자/투수 분리 코스트 게이지 + 활성 버프 칩 + 팀 설정 토글 */
 export function TeamStatBar({
   cost,
+  pitcherCost,
   ts,
   ctx,
   editable,
@@ -14,14 +15,21 @@ export function TeamStatBar({
   onToggleSettings,
 }: {
   cost: TeamCost
+  pitcherCost: PitcherCost
   ts: TeamSettings
   ctx: TeamCtx
   editable: boolean
   settingsOpen: boolean
   onToggleSettings: () => void
 }) {
-  const over = cost.remain < 0
-  const pct = Math.min(100, (cost.total / TOTAL_COST) * 100)
+  // 예산은 타자+투수 합쳐 300 하나. 초과는 경고만.
+  const batterTotal = cost.total
+  const pitcherTotal = pitcherCost.total
+  const grand = batterTotal + pitcherTotal
+  const remain = TOTAL_COST - grand
+  const over = remain < 0
+  const batterPct = Math.min(100, (batterTotal / TOTAL_COST) * 100)
+  const pitcherPct = Math.min(100 - batterPct, (pitcherTotal / TOTAL_COST) * 100)
 
   const chips: { label: string; on: boolean; warn?: boolean }[] = [
     {
@@ -48,7 +56,10 @@ export function TeamStatBar({
       <HoverTip
         tip={
           <div className="flex flex-col gap-[3px] min-w-[190px]">
-            <div className="text-[.66rem] font-bold uppercase tracking-[.06em] text-ink-faint">코스트 내역</div>
+            <div className="flex items-center justify-between gap-3 text-[.66rem] font-bold uppercase tracking-[.06em] text-ink-faint">
+              <span>타자 코스트</span>
+              <span className="font-mono tabular-nums text-[color:var(--green)]">{batterTotal}</span>
+            </div>
             {cost.lines.map((l) => (
               <div key={l.grade} className="flex items-center justify-between gap-3">
                 <span>
@@ -72,10 +83,22 @@ export function TeamStatBar({
                 <b className="font-mono tabular-nums text-[color:var(--green)]">{cost.discount.sum}</b>
               </div>
             )}
+            <div className="mt-[3px] border-t border-line pt-[3px] flex items-center justify-between gap-3 text-[.66rem] font-bold uppercase tracking-[.06em] text-ink-faint">
+              <span>투수 코스트</span>
+              <span className="font-mono tabular-nums text-[color:var(--blue)]">{pitcherTotal}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>선발 (출전만)</span>
+              <b className="font-mono tabular-nums">{pitcherCost.starter}</b>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>계투 (전원)</span>
+              <b className="font-mono tabular-nums">{pitcherCost.relief}</b>
+            </div>
             <div className="mt-[2px] border-t border-line pt-[3px] flex items-center justify-between gap-3 font-bold">
               <span>합계 · 잔여</span>
               <span className="font-mono tabular-nums">
-                {cost.total} · <span className={cost.remain < 0 ? 'text-[color:var(--clay)]' : 'text-[color:var(--green)]'}>{cost.remain}</span>
+                {grand}/{TOTAL_COST} · <span className={over ? 'text-[color:var(--clay)]' : 'text-[color:var(--green)]'}>{remain}</span>
               </span>
             </div>
           </div>
@@ -83,19 +106,27 @@ export function TeamStatBar({
       >
         <div className="flex items-center gap-2 min-w-[220px] cursor-help">
           <span className="text-[.64rem] font-bold uppercase tracking-[.08em] text-ink-faint">코스트</span>
-          <div className="relative h-2.5 w-[110px] rounded-full bg-surface-2 border border-line overflow-hidden">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full transition-all"
-              style={{ width: `${pct}%`, background: over ? 'var(--clay)' : 'var(--green)' }}
-            />
+          {/* 타자(초록) + 투수(파랑) 스택 게이지 — 하나의 300 트랙 */}
+          <div className="flex h-2.5 w-[120px] rounded-full bg-surface-2 border border-line overflow-hidden">
+            <div className="h-full transition-all" style={{ width: `${batterPct}%`, background: 'var(--green)' }} />
+            <div className="h-full transition-all" style={{ width: `${pitcherPct}%`, background: 'var(--blue)' }} />
           </div>
+          <span className="tabular-nums text-[.7rem]">
+            <span className="text-[color:var(--green)] font-bold">타 {batterTotal}</span>
+            <span className="text-ink-faint"> · </span>
+            <span className="text-[color:var(--blue)] font-bold">투 {pitcherTotal}</span>
+          </span>
           <span className={cn('font-mono tabular-nums text-[.82rem] font-extrabold', over && 'text-[color:var(--clay)]')}>
-            {cost.total}
+            {grand}
             <span className="text-ink-faint font-normal">/{TOTAL_COST}</span>
           </span>
-          <span className={cn('text-[.72rem] tabular-nums', over ? 'text-[color:var(--clay)] font-bold' : 'text-ink-faint')}>
-            잔여 {cost.remain}
-          </span>
+          {over ? (
+            <span className="rounded-full bg-[color:var(--clay)] px-2 py-[1px] text-[.66rem] font-extrabold text-white">
+              초과 {-remain}
+            </span>
+          ) : (
+            <span className="text-[.72rem] tabular-nums text-ink-faint">잔여 {remain}</span>
+          )}
         </div>
       </HoverTip>
 

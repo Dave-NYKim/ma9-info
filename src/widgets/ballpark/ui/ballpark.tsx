@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { RosterSlot } from '@entities/roster'
+import type { RosterPitcher, RosterSlot } from '@entities/roster'
 import { positionFit, slotView } from '@entities/roster'
 import { FIELD_POS, LINEUP_POSITIONS, type LineupPosition } from '@shared/config/roster'
 import { gradeCssVar } from '@shared/config/grades'
@@ -27,6 +27,8 @@ export function Ballpark({
   onChipClick,
   onRemove,
   onEmptyClick,
+  moundPitcher = null,
+  onMoundClick,
 }: {
   slots: RosterSlot[]
   editable: boolean
@@ -38,8 +40,13 @@ export function Ballpark({
   onRemove: (s: RosterSlot) => void
   /** 빈 포지션 클릭 → 선수 선택 팝업 */
   onEmptyClick?: (pos: LineupPosition) => void
+  /** 마운드 등판 선발 (없으면 대시 P) — 아래 「투수」 패널에서 지정 */
+  moundPitcher?: RosterPitcher | null
+  /** 마운드 클릭 → 아래 토글을 투수로 (편집자만) */
+  onMoundClick?: () => void
 }) {
   const byPos = new Map(slots.map((s) => [s.assigned_position, s]))
+
   return (
     <div className="relative w-full aspect-[100/46] select-none">
       {/* ── 야구장 (오늘 첫 버전 색감 · 너비 꽉 채우고 높이만 압축) ── */}
@@ -88,7 +95,7 @@ export function Ballpark({
         <rect x="49" y="66.7" width="2" height=".7" fill={LINE} opacity=".9" />
       </svg>
 
-      {/* ── 포지션 노드 (오버레이) ── */}
+      {/* ── 야수 포지션 노드 ── */}
       {LINEUP_POSITIONS.map((pos) => {
         const s = byPos.get(pos)
         return s ? (
@@ -105,13 +112,72 @@ export function Ballpark({
           <EmptyNode key={pos} pos={pos} onClick={editable && onEmptyClick ? () => onEmptyClick(pos) : undefined} />
         )
       })}
-      {/* P 마운드 — 이번 범위 밖(비워둠) */}
+
+      {/* ── 마운드 등판 투수 (아래 「투수」 패널에서 지정) — 클릭 = 투수 패널로 ── */}
+      <MoundChip pitcher={moundPitcher} onClick={editable ? onMoundClick : undefined} />
+    </div>
+  )
+}
+
+/** 마운드 칩 — 선발 등판 투수(없으면 대시 P). 등급색 미니카드. onClick 있으면 클릭 가능. */
+function MoundChip({ pitcher, onClick }: { pitcher: RosterPitcher | null; onClick?: () => void }) {
+  const { x, y } = FIELD_POS.P
+  const clickable = !!onClick
+  const common = 'absolute -translate-x-1/2 -translate-y-1/2 z-10 transition'
+  if (!pitcher || !pitcher.pitcher) {
+    return (
       <div
-        className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border border-dashed flex items-center justify-center text-[.6rem] font-bold text-ink-faint opacity-50"
-        style={{ left: `${FIELD_POS.P.x}%`, top: `${FIELD_POS.P.y}%`, borderColor: 'var(--line-strong)' }}
-        title="투수 슬롯 (추후)"
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onClick={onClick}
+        onKeyDown={clickable ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick?.() : undefined}
+        className={cn(
+          common,
+          'w-9 h-9 rounded-full border-2 border-dashed flex items-center justify-center text-[.6rem] font-extrabold text-ink-soft bg-[color:var(--surface)]/45',
+          clickable && 'cursor-pointer hover:scale-110 hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]',
+        )}
+        style={{ left: `${x}%`, top: `${y}%`, borderColor: 'color-mix(in srgb, var(--ink) 30%, transparent)' }}
+        title={clickable ? '클릭 = 아래 투수에서 선발 등판 지정' : '등판 선발 미지정'}
       >
         P
+      </div>
+    )
+  }
+  const pit = pitcher.pitcher
+  const gradeColor = `var(${gradeCssVar(pit.grade)})`
+  const sheen = pit.grade === 'SG' || pit.grade === 'B' // 타자 칩과 동일한 광택
+  const hands = `${pit.throw_hand}/${pit.bat_hand}`
+  return (
+    <div
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={clickable ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick?.() : undefined}
+      className={cn(
+        common,
+        'group rounded-lg border-2 px-1.5 py-1 w-[clamp(76px,9vw,110px)] shadow-[var(--shadow)]',
+        sheen && 'chip-sheen',
+        clickable && 'cursor-pointer hover:-translate-y-[calc(50%+2px)]',
+      )}
+      style={{
+        left: `${x}%`,
+        top: `${y}%`,
+        borderColor: gradeColor,
+        background: `color-mix(in srgb, ${gradeColor} 14%, var(--surface))`,
+        ...(pit.grade === 'B' ? { boxShadow: '0 0 0 1px rgba(255,255,255,.45), var(--shadow)' } : {}),
+        ...(sheen ? { ['--shine']: pit.grade === 'SG' ? 'rgba(255,255,255,.75)' : 'rgba(255,214,90,.8)' } : {}),
+      }}
+      title="선발 등판"
+    >
+      <div className="relative z-[1]">
+        <div className="flex items-center gap-1 leading-none">
+          <span className="rounded bg-ink px-1 py-[1px] text-[.5rem] font-extrabold text-[color:var(--surface)]">선발</span>
+          <span className="text-[.56rem] font-bold text-ink-faint tracking-tight">SP</span>
+        </div>
+        <div className="mt-0.5 text-[.72rem] font-extrabold truncate text-ink">{pit.name}</div>
+        <div className="text-[.56rem] font-semibold leading-tight truncate text-ink-soft">
+          {pit.year ? `${pit.year} · ${hands}` : hands}
+        </div>
       </div>
     </div>
   )

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useBatterYears } from '@entities/batter'
+import { usePitcherYears } from '@entities/pitcher'
 import { codeLabel, codeValues, teamsByLeague, type CodeMap } from '@entities/code'
 import { useBatterPotentials, usePitcherPotentials } from '@entities/potential'
 import { PotentialInput } from '@features/potential-autocomplete'
@@ -21,6 +23,8 @@ export interface Filters extends AdvancedFilters {
   league?: string
   team?: string
   grade?: string
+  /** 연도 정확일치 */
+  year?: number
   q?: string
   /** 타자: 레벨업 1유형(파워/컨택트) · 2유형(스피드/쓰로잉/수비력, 듀얼 포함) */
   levelup1?: string
@@ -60,11 +64,14 @@ export function FilterBar({
   const [open, setOpen] = useState(false)
   const { data: batterPots } = useBatterPotentials()
   const { data: pitcherPots } = usePitcherPotentials()
+  const { data: batterYears } = useBatterYears()
+  const { data: pitcherYears } = usePitcherYears()
 
   const set = (patch: Partial<Filters>) => onChange({ ...value, ...patch })
 
   const isPitcher = kind === 'pitcher'
   const potOptions = (isPitcher ? pitcherPots : batterPots) ?? []
+  const years = (isPitcher ? pitcherYears : batterYears) ?? []
   const stats = isPitcher ? PITCHER_STATS : BATTER_STATS
   const pitcherPos = PITCHER_POSITION_CODES as readonly string[]
   const positions = codeValues(enums, 'position').filter((c) => pitcherPos.includes(c) === isPitcher)
@@ -144,6 +151,18 @@ export function FilterBar({
           <option value="">전체 등급</option>
           {codeValues(enums, 'grade').map((c) => (
             <option key={c}>{c}</option>
+          ))}
+        </Select>
+        <Select
+          className="w-auto"
+          value={value.year ?? ''}
+          onChange={(e) => set({ year: e.target.value ? Number(e.target.value) : undefined })}
+        >
+          <option value="">전체 연도</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
           ))}
         </Select>
         <Input

@@ -1,6 +1,14 @@
 import { supabase } from '@shared/api/supabase'
 import { ConflictError } from '@shared/lib/errors'
-import type { Roster, RosterDetail, RosterListItem, RosterSlot, SlotInput } from '../model/types'
+import type {
+  Roster,
+  RosterDetail,
+  RosterListItem,
+  RosterPitcher,
+  RosterPitcherInput,
+  RosterSlot,
+  SlotInput,
+} from '../model/types'
 
 export { ConflictError }
 
@@ -23,7 +31,9 @@ export async function listRosters(scope: 'mine' | 'all', userId: string | null):
 export async function getRoster(id: string): Promise<RosterDetail> {
   const { data, error } = await supabase
     .from('rosters')
-    .select(`*, ${OWNER}, roster_players(*, batter:batters(*), prospect:roster_prospects(*)), roster_growth(*), roster_prospects(*)`)
+    .select(
+      `*, ${OWNER}, roster_players(*, batter:batters(*), prospect:roster_prospects(*)), roster_growth(*), roster_prospects(*), roster_pitchers(*, pitcher:pitchers(*, pitcher_pitches(*)))`,
+    )
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -136,5 +146,50 @@ export async function applySlots(entries: SlotChange[]): Promise<void> {
     })
   if (rows.length === 0) return
   const { error } = await supabase.from('roster_players').upsert(rows)
+  if (error) throw error
+}
+
+// ---------- 투수진 (선발 5 + 계투 18 — roster_pitchers) ----------
+
+export async function addPitcher(input: RosterPitcherInput): Promise<void> {
+  const { error } = await supabase.from('roster_pitchers').insert(input)
+  if (error) throw error
+}
+
+export async function updatePitcher(id: string, patch: Partial<RosterPitcherInput>): Promise<void> {
+  const { error } = await supabase.from('roster_pitchers').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function removePitcher(id: string): Promise<void> {
+  const { error } = await supabase.from('roster_pitchers').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** 투수 칸 일괄 변경(이동·역할 교환) — upsert 단일 트랜잭션.
+ *  uq_rpitcher_slot 이 deferrable 이라 커밋 시점 검사로 통과.
+ *  ※ id·roster_id·pitcher_id 를 전부 실어야 INSERT 폴백 시 NOT NULL/CHECK 위반을 막는다. */
+export interface PitcherSlotChange {
+  slot: RosterPitcher
+  role?: RosterPitcher['role']
+  slot_order?: number
+  active?: boolean
+}
+export async function applyPitcherSlots(entries: PitcherSlotChange[]): Promise<void> {
+  const rows = entries
+    .map(({ slot: s, role, slot_order, active }) => ({
+      id: s.id,
+      roster_id: s.roster_id,
+      pitcher_id: s.pitcher_id,
+      role: role ?? s.role,
+      slot_order: slot_order ?? s.slot_order,
+      active: active ?? s.active,
+    }))
+    .filter((r, i) => {
+      const s = entries[i].slot
+      return r.role !== s.role || r.slot_order !== s.slot_order || r.active !== s.active
+    })
+  if (rows.length === 0) return
+  const { error } = await supabase.from('roster_pitchers').upsert(rows)
   if (error) throw error
 }

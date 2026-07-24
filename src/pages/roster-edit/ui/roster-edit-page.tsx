@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { Batter } from '@entities/batter'
+import type { Pitcher } from '@entities/pitcher'
 import { usePool } from '@entities/pool'
 import { useSession } from '@entities/session'
 import {
@@ -18,7 +19,13 @@ import {
   useCreateProspect,
   useUpdateProspect,
   useDeleteProspect,
+  useAddPitcher,
+  useRemovePitcher,
+  useApplyPitcherSlots,
   slotView,
+  type PitcherRole,
+  type PitcherSlotChange,
+  type RosterPitcher,
   type RosterProspectRow,
   type RosterSlot,
 } from '@entities/roster'
@@ -27,6 +34,8 @@ import { BattingOrder } from '@widgets/batting-order'
 import { PoolPanel, type ProspectItem } from '@widgets/pool-panel'
 import { GrowthSheet } from '@widgets/growth-sheet'
 import { PositionPicker } from '@widgets/position-picker'
+import { PitcherPicker } from '@widgets/pitcher-picker'
+import { PitcherStaff } from '@widgets/pitcher-staff'
 import { ProspectSheet, ProspectGrowthSheet } from '@widgets/prospect-sheet'
 import { TeamSettingsPanel } from '@widgets/team-settings'
 import { LineupSheet } from '@widgets/lineup-sheet'
@@ -44,13 +53,15 @@ import {
 } from '@shared/config/team-stats'
 import {
   computeCost,
+  computePitcherCost,
   computeProspectStats,
   computeSlotStats,
   computeTeamCtx,
   type EngineSlot,
+  type PitcherCostInput,
   type SlotStats,
 } from '@shared/lib/stat-engine'
-import { Badge, Button, Input, Panel } from '@shared/ui'
+import { Badge, Button, Input, Panel, Segmented } from '@shared/ui'
 
 export function RosterEditPage() {
   const { id } = useParams<{ id: string }>()
@@ -73,6 +84,9 @@ export function RosterEditPage() {
   const createProspectMut = useCreateProspect(id ?? '')
   const updateProspectMut = useUpdateProspect(id ?? '')
   const deleteProspectMut = useDeleteProspect(id ?? '')
+  const addPitcherMut = useAddPitcher(id ?? '')
+  const rmPitcherMut = useRemovePitcher(id ?? '')
+  const applyPitcherMut = useApplyPitcherSlots(id ?? '')
   const renameMut = useUpdateRoster()
   const delMut = useDeleteRoster()
   const settingsMut = useUpdateTeamSettings(id ?? '')
@@ -90,6 +104,10 @@ export function RosterEditPage() {
   const [prospectGrowthRow, setProspectGrowthRow] = useState<RosterProspectRow | null>(null)
   /** 야구장 빈 포지션 클릭 → 선수 선택 팝업 */
   const [pickerPos, setPickerPos] = useState<LineupPosition | null>(null)
+  /** 투수진 빈 칸 클릭 → 투수 선택 팝업 (역할 + 자리) */
+  const [pitcherPick, setPitcherPick] = useState<{ role: PitcherRole; slot: number } | null>(null)
+  /** 타순 자리 토글 — 타자(타순표) / 투수(선발·계투) */
+  const [teamTab, setTeamTab] = useState<'타자' | '투수'>('타자')
 
   // ---- 팀 스탯 (SPEC §10) — jsonb 파싱 → 엔진 ----
   const ts: TeamSettings = useMemo(() => parseTeamSettings(roster?.team_settings), [roster?.team_settings])
@@ -113,6 +131,26 @@ export function RosterEditPage() {
   )
   const ctx = useMemo(() => computeTeamCtx(engineSlots), [engineSlots])
   const cost = useMemo(() => computeCost(engineSlots, ctx), [engineSlots, ctx]) // 유망주 = 코스트 0 (미포함)
+
+  // ---- 투수진 (선발 5 + 계투 18) — 타자 라인업과 별도, 코스트만 합산 ----
+  const pitchers = useMemo<RosterPitcher[]>(() => roster?.roster_pitchers ?? [], [roster?.roster_pitchers])
+  const starters = useMemo(
+    () => pitchers.filter((p) => p.role === '선발').sort((a, b) => a.slot_order - b.slot_order),
+    [pitchers],
+  )
+  const relief = useMemo(
+    () => pitchers.filter((p) => p.role === '계투').sort((a, b) => a.slot_order - b.slot_order),
+    [pitchers],
+  )
+  const activeStarter = useMemo(() => starters.find((s) => s.active) ?? null, [starters]) // 마운드 등판
+  const pitcherCost = useMemo(
+    () =>
+      computePitcherCost(
+        pitchers.map((p): PitcherCostInput => ({ grade: p.pitcher?.grade ?? '', role: p.role, active: p.active })),
+      ),
+    [pitchers],
+  )
+  const staffIds = useMemo(() => new Set(pitchers.map((p) => p.pitcher_id)), [pitchers])
   /** 라인업 슬롯별 최종 스탯 (카드 + 유망주 모두) */
   const slotStatsList = useMemo(
     () =>
@@ -238,6 +276,48 @@ export function RosterEditPage() {
   const fail = (e: Error) => {
     const code = (e as { code?: string }).code
     toast.error(code === '23505' ? '자리·타순·카드가 겹칩니다 — 잠시 후 다시 시도하세요' : e.message)
+  }
+
+  /** 투수진 배치 — 빈 칸(role·slot)에 투수 편성 (같은 투수 중복은 DB uq 로 차단).
+   *  계투 = 항상 코스트(active) · 선발 = 등판 선발이 아직 없을 때만 자동 등판. */
+  const assignPitcher = (p: Pitcher, role: PitcherRole, slot: number) => {
+    if (!roster) return
+    setPitcherPick(null)
+    const active = role === '계투' || !starters.some((s) => s.active)
+    addPitcherMut.mutate(
+      { roster_id: roster.id, pitcher_id: p.id, role, slot_order: slot, active },
+      { onSuccess: () => toast(`${role} ${slot} 편성 → ${p.name}`), onError: fail },
+    )
+  }
+  /** 선발 등판 지정(라디오) — 1명만 등판(마운드·코스트). 이미 등판이면 해제. 이전 등판은 자동 해제. */
+  const selectStarter = (target: RosterPitcher) => {
+    const changes: PitcherSlotChange[] = []
+    if (target.active) {
+      changes.push({ slot: target, active: false })
+    } else {
+      changes.push({ slot: target, active: true })
+      // 이전 등판(들) 전부 해제 — 전환기 데이터로 복수 active 였어도 정리
+      for (const s of starters) if (s.active && s.id !== target.id) changes.push({ slot: s, active: false })
+    }
+    applyPitcherMut.mutate(changes, {
+      onSuccess: () => toast(target.active ? '등판 해제' : `${target.pitcher?.name ?? '선발'} 등판`),
+      onError: fail,
+    })
+  }
+  const removePitcher = (p: RosterPitcher) =>
+    rmPitcherMut.mutate(p.id, {
+      onSuccess: () => toast(`「${p.pitcher?.name ?? '투수'}」 투수진에서 제외`),
+      onError: fail,
+    })
+  /** 투수 순서 변경(타순처럼) — 같은 역할 안에서 slot_order 교환/이동. target 없으면 빈 칸으로 이동. */
+  const reorderPitcher = (dragged: RosterPitcher, slot: number, target: RosterPitcher | null) => {
+    const changes: PitcherSlotChange[] = target
+      ? [
+          { slot: dragged, slot_order: target.slot_order },
+          { slot: target, slot_order: dragged.slot_order },
+        ]
+      : [{ slot: dragged, slot_order: slot }]
+    applyPitcherMut.mutate(changes, { onSuccess: () => toast('투수 순서 변경'), onError: fail })
   }
 
   /** 야구장 칩 두 개 클릭 = 타순 교환 */
@@ -503,6 +583,7 @@ export function RosterEditPage() {
       {/* 팀 스탯 바 — 코스트 게이지 + 활성 버프 (SPEC §10) */}
       <TeamStatBar
         cost={cost}
+        pitcherCost={pitcherCost}
         ts={ts}
         ctx={ctx}
         editable={isOwner}
@@ -517,7 +598,7 @@ export function RosterEditPage() {
         </div>
       )}
 
-      {/* ── 1. 야구장 (전체 너비) ── */}
+      {/* ── 1. 야구장 (전체 너비 · 공유) — 마운드에 등판 선발 ── */}
       <Ballpark
         slots={slots}
         editable={isOwner}
@@ -526,17 +607,48 @@ export function RosterEditPage() {
         onChipClick={slotClick}
         onRemove={removeSlot}
         onEmptyClick={(pos) => setPickerPos(pos)}
+        moundPitcher={activeStarter}
+        onMoundClick={() => setTeamTab('투수')}
       />
 
-      {/* ── 2. 타순 — 전체 라인업 표 (「타순 간략 보기」 = 팝업) ── */}
-      <LineupSheet
-        entries={slotStatsList}
-        growthMap={growthMap}
-        editable={isOwner}
-        onMove={moveOrder}
-        teamAvg={teamAvg}
-        onShowOrder={() => setOrderOpen(true)}
-      />
+      {/* ── 2. 타순 자리 — [타자] 타순표 · [투수] 선발·계투 (야구장은 공유) ── */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-[200px]">
+            <Segmented options={['타자', '투수']} value={teamTab} onChange={(v) => setTeamTab(v as '타자' | '투수')} />
+          </div>
+          {teamTab === '투수' && (
+            <span className="text-[.72rem] text-ink-faint">
+              {activeStarter?.pitcher ? (
+                <>등판 <b className="text-ink">{activeStarter.pitcher.name}</b> · 마운드 표시</>
+              ) : (
+                '등판 선발 미지정 — 선발 카드를 클릭'
+              )}
+            </span>
+          )}
+        </div>
+        {teamTab === '타자' ? (
+          <LineupSheet
+            entries={slotStatsList}
+            growthMap={growthMap}
+            editable={isOwner}
+            onMove={moveOrder}
+            teamAvg={teamAvg}
+            onShowOrder={() => setOrderOpen(true)}
+          />
+        ) : (
+          <PitcherStaff
+            starters={starters}
+            relief={relief}
+            cost={pitcherCost}
+            editable={isOwner}
+            onSelectStarter={selectStarter}
+            onRemove={removePitcher}
+            onReorder={reorderPitcher}
+            onEmpty={(role, slot) => setPitcherPick({ role, slot })}
+          />
+        )}
+      </div>
 
       {!isOwner && (
         <Panel title="읽기 전용">
@@ -603,6 +715,17 @@ export function RosterEditPage() {
             assignProspect(row, pickerPos)
           }}
           onClose={() => setPickerPos(null)}
+        />
+      )}
+
+      {/* 투수진 빈 칸 클릭 → 투수 선택 팝업 (검색·전체선수 포함) */}
+      {pitcherPick && (
+        <PitcherPicker
+          role={pitcherPick.role}
+          slotOrder={pitcherPick.slot}
+          staffIds={staffIds}
+          onPick={(p) => assignPitcher(p, pitcherPick.role, pitcherPick.slot)}
+          onClose={() => setPitcherPick(null)}
         />
       )}
 

@@ -10,6 +10,7 @@ export async function listPitchers(f: PitcherFilters): Promise<{ items: Pitcher[
   if (f.league) q = q.eq('league_code', f.league)
   if (f.team) q = q.eq('team_code', f.team)
   if (f.grade) q = q.eq('grade', f.grade)
+  if (f.year != null) q = q.eq('year', f.year)
   if (f.q) q = q.ilike('name', `%${f.q}%`)
   if (f.levelupPitch) q = q.eq('levelup_pitch', f.levelupPitch)
   q = applyAdvancedFilters(q, f)
@@ -36,6 +37,7 @@ export async function listPitchersWithPitches(
   if (f.league) q = q.eq('league_code', f.league)
   if (f.team) q = q.eq('team_code', f.team)
   if (f.grade) q = q.eq('grade', f.grade)
+  if (f.year != null) q = q.eq('year', f.year)
   if (f.q) q = q.ilike('name', `%${f.q}%`)
   if (f.levelupPitch) q = q.eq('levelup_pitch', f.levelupPitch)
   for (const [k, r] of pitchConds) {

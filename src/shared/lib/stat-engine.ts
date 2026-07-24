@@ -144,6 +144,42 @@ export function computeCost(slots: EngineSlot[], ctx: TeamCtx): TeamCost {
   }
 }
 
+// ---------- 투수 코스트 (선발 5 + 계투 18) ----------
+// 타자 라인업과 별도 집계하되 예산은 합쳐서 300(TOTAL_COST). 초과는 페이지에서 판정.
+//   · 선발 = active(출전)인 것만 합산 · 계투 = 전원 합산
+//   · role 은 shared→entities 역참조 방지 위해 문자열 리터럴로 받음
+export interface PitcherCostInput {
+  grade: string
+  role: '선발' | '계투'
+  active: boolean
+}
+export interface PitcherCost {
+  starter: number // 출전 선발 합
+  relief: number // 계투 18 전원 합
+  total: number // starter + relief
+  per: number[] // 입력 순서별 실제 기여 코스트 (미출전 선발 = 0)
+  lines: CostLine[] // 등급별 내역 (호버용)
+}
+
+/** 투수 장당 코스트 — 등급표 공유. S=0 · SG=45(투수는 각성 데이터 없어 기본가). */
+export const pitcherUnitCost = (grade: string) => (grade === 'SG' ? sgCost(0) : GRADE_COST[grade] ?? 0)
+const pitcherUnit = pitcherUnitCost
+/** 이 투수가 코스트에 잡히는가 — 선발은 출전만, 계투는 항상 */
+const pitcherCounts = (p: PitcherCostInput) => p.role === '계투' || p.active
+
+export function computePitcherCost(list: PitcherCostInput[]): PitcherCost {
+  const per = list.map((p) => (pitcherCounts(p) ? pitcherUnit(p.grade) : 0))
+  const starter = list.reduce((a, p, i) => a + (p.role === '선발' ? per[i] : 0), 0)
+  const relief = list.reduce((a, p, i) => a + (p.role === '계투' ? per[i] : 0), 0)
+  const counted = list.filter(pitcherCounts)
+  const lines: CostLine[] = GRADE_ORDER.map((grade) => {
+    const count = counted.filter((p) => p.grade === grade).length
+    const unit = pitcherUnit(grade)
+    return { grade, count, unit, sum: unit * count }
+  }).filter((l) => l.count > 0)
+  return { starter, relief, total: starter + relief, per, lines }
+}
+
 // ---------- 슬롯 최종 스탯 ----------
 export interface BreakdownItem {
   label: string

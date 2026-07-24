@@ -12,6 +12,7 @@ export async function listBatters(f: BatterFilters): Promise<{ items: Batter[]; 
   if (f.league) q = q.eq('league_code', f.league)
   if (f.team) q = q.eq('team_code', f.team)
   if (f.grade) q = q.eq('grade', f.grade)
+  if (f.year != null) q = q.eq('year', f.year)
   if (f.q) q = q.ilike('name', `%${f.q}%`)
   if (f.levelup1) q = q.eq('levelup_type1', f.levelup1)
   if (f.levelup2) q = q.or(`levelup_type2.eq.${f.levelup2},dual_levelup_type2.eq.${f.levelup2}`)

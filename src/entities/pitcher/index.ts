@@ -11,6 +11,7 @@ export {
   usePitchers,
   usePitcherCards,
   usePitcher,
+  usePitcherYears,
   usePitcherNameSearch,
   useCreatePitcher,
   useUpdatePitcher,

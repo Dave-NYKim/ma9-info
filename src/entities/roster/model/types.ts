@@ -1,6 +1,28 @@
 import type { Batter } from '@entities/batter'
+import type { PitcherWithPitches } from '@entities/pitcher'
 import type { LineupPosition } from '@shared/config/roster'
 import { parseProspect } from '@shared/config/prospects'
+
+// ---------- 투수진 (선발 5 + 계투 18) ----------
+export const STARTER_SIZE = 5
+export const RELIEF_SIZE = 18
+export type PitcherRole = '선발' | '계투'
+
+/** 팀 투수 한 자리 = roster_pitchers 한 행. 타자 라인업과 분리된 별도 테이블. */
+export interface RosterPitcher {
+  id: string
+  roster_id: string
+  pitcher_id: string
+  role: PitcherRole
+  slot_order: number // 선발 1~5 · 계투 1~18
+  active: boolean // 출전 여부 (선발 코스트 게이팅 · 계투는 항상 집계)
+  created_at: string
+  pitcher: PitcherWithPitches | null // 구종 포함(카드 표시용)
+}
+export type RosterPitcherInput = Pick<
+  RosterPitcher,
+  'roster_id' | 'pitcher_id' | 'role' | 'slot_order' | 'active'
+>
 
 export interface Roster {
   id: string
@@ -114,6 +136,7 @@ export interface RosterDetail extends Roster {
   roster_players: RosterSlot[]
   roster_growth: RosterGrowthRow[]
   roster_prospects: RosterProspectRow[]
+  roster_pitchers: RosterPitcher[]
 }
 
 export type SlotInput = Pick<

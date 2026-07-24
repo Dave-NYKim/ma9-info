@@ -50,6 +50,8 @@ export interface PitcherFilters extends AdvancedFilters {
   league?: string
   team?: string
   grade?: string
+  /** 연도 정확일치 */
+  year?: number
   q?: string
   /** 레벨업(성장) 구종 키 (W/A/D/F/Z/X/C) */
   levelupPitch?: string

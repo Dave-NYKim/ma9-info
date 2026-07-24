@@ -1,22 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  addPitcher,
   addSlot,
+  applyPitcherSlots,
   applySlots,
   createProspect,
   createRoster,
   deleteProspect,
   getRoster,
   listRosters,
+  removePitcher,
   removeSlot,
   softDeleteRoster,
+  updatePitcher,
   updateProspect,
   updateRoster,
   updateSlot,
   updateTeamSettings,
   upsertGrowth,
+  type PitcherSlotChange,
   type SlotChange,
 } from '../api/roster-api'
-import type { Roster, SlotInput } from './types'
+import type { Roster, RosterPitcherInput, SlotInput } from './types'
 
 export const rosterKeys = {
   all: ['rosters'] as const,
@@ -88,3 +93,12 @@ export const useCreateProspect = (rosterId: string) => {
 export const useUpdateProspect = (rosterId: string) =>
   useLineupMutation(rosterId, (v: { id: string; data: unknown }) => updateProspect(v.id, v.data))
 export const useDeleteProspect = (rosterId: string) => useLineupMutation(rosterId, (id: string) => deleteProspect(id))
+
+// ---------- 투수진 ----------
+export const useAddPitcher = (rosterId: string) =>
+  useLineupMutation(rosterId, (input: RosterPitcherInput) => addPitcher(input))
+export const useUpdatePitcher = (rosterId: string) =>
+  useLineupMutation(rosterId, (v: { id: string; patch: Partial<RosterPitcherInput> }) => updatePitcher(v.id, v.patch))
+export const useRemovePitcher = (rosterId: string) => useLineupMutation(rosterId, (id: string) => removePitcher(id))
+export const useApplyPitcherSlots = (rosterId: string) =>
+  useLineupMutation(rosterId, (entries: PitcherSlotChange[]) => applyPitcherSlots(entries))

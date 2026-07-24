@@ -4,6 +4,7 @@ export {
   batterKeys,
   useBatters,
   useBatter,
+  useBatterYears,
   useBatterNameSearch,
   useCreateBatter,
   useUpdateBatter,

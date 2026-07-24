@@ -5,11 +5,14 @@ export type {
   RosterGrowthRow,
   RosterProspectRow,
   RosterDetail,
+  RosterPitcher,
+  RosterPitcherInput,
+  PitcherRole,
   SlotInput,
   SlotView,
   PositionFit,
 } from './model/types'
-export { positionFit, slotView } from './model/types'
+export { positionFit, slotView, STARTER_SIZE, RELIEF_SIZE } from './model/types'
 export {
   rosterKeys,
   useRosters,
@@ -26,5 +29,9 @@ export {
   useCreateProspect,
   useUpdateProspect,
   useDeleteProspect,
+  useAddPitcher,
+  useUpdatePitcher,
+  useRemovePitcher,
+  useApplyPitcherSlots,
 } from './model/queries'
-export { ConflictError, type SlotChange } from './api/roster-api'
+export { ConflictError, type SlotChange, type PitcherSlotChange } from './api/roster-api'

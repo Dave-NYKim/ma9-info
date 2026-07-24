@@ -10,6 +10,7 @@ import { LEAGUE_COLOR } from '@shared/config/leagues'
 import { PITCH_KEYS } from '@shared/config/domain'
 import { pitcherDualDelta } from '@shared/config/dual-position'
 import { Badge, HoverTip, NameWing, StatTile, TeamWatermark, TruncateTip } from '@shared/ui'
+import { cn } from '@shared/lib/cn'
 
 /** 구종 표시명 = 특이구종이면 고유명, 아니면 계열명 */
 const pitchLabel = (p: { pitch_type: string; is_special: boolean; special_name: string | null }) =>
@@ -22,12 +23,16 @@ export function PitcherCard({
   potentialQuery,
   positionQuery,
   onClick,
+  showAddToPool = true,
 }: {
   p: PitcherWithPitches
   codes: CodeMap | undefined
   potentialQuery?: string
   positionQuery?: string
-  onClick: () => void
+  /** 없으면 비클릭(정보 표시 전용) — 투수진 계투 카드 등 */
+  onClick?: () => void
+  /** 우하단 「+풀」 버튼 표시 (팀 투수진에서는 숨김) */
+  showAddToPool?: boolean
 }) {
   const hasDual = !!p.dual_position
 
@@ -87,11 +92,14 @@ export function PitcherCard({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}
-      className="relative text-left rounded-xl border-2 overflow-hidden shadow-[var(--shadow)] transition hover:brightness-[1.02] hover:-translate-y-px cursor-pointer focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
+      onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick() : undefined}
+      className={cn(
+        'relative text-left rounded-xl border-2 overflow-hidden shadow-[var(--shadow)] transition focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]',
+        onClick && 'hover:brightness-[1.02] hover:-translate-y-px cursor-pointer',
+      )}
       style={{
         background: gradeCardBg(p.grade),
         borderColor: gradeColor,
@@ -247,7 +255,7 @@ export function PitcherCard({
           </div>
         )}
       </div>
-      <AddToPoolButton kind="pitcher" id={p.id} name={p.name} />
+      {showAddToPool && <AddToPoolButton kind="pitcher" id={p.id} name={p.name} />}
     </div>
   )
 }
