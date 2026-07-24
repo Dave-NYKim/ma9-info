@@ -443,11 +443,14 @@ export function LineupSheet({
                     return (
                       <td
                         key={k}
-                        className={`font-mono tabular-nums text-[.95rem] font-bold py-[3px] px-3${tier.cls ? ` ${tier.cls}` : ''}`}
-                        style={{ color: tier.color, background: 'var(--surface)', border: '1px solid var(--line)' }}
+                        className="font-mono tabular-nums text-[.95rem] font-bold py-[3px] px-3"
+                        style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}
                         title={tier.label}
                       >
-                        {v.toFixed(1)}
+                        {/* 극한(stat-extreme) 은 배경-클립 글자라 셀 배경에 덮이면 안 됨 → 안쪽 span 에만 적용 */}
+                        <span className={tier.cls || undefined} style={{ color: tier.color }}>
+                          {v.toFixed(1)}
+                        </span>
                       </td>
                     )
                   })}
